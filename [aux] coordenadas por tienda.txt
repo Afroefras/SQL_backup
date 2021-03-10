@@ -1,0 +1,4 @@
+select csb.store_id, cs.name, cs.country, csb.lat, csb.lng, csb.address, csb.location
+from catalog_store cs
+join catalog_storebranch csb on csb.store_id = cs.id
+where cs.country = 'BR'
