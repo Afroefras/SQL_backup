@@ -1,0 +1,16 @@
+select 
+    cpg.name as cpg,
+    cpg.id as cpg_id,
+    cpg.country_id,
+    b.name as brand,
+    p.id as product_id,
+    p.barcodes,
+    p.name as product_name,
+    p.package,
+    p.currency
+from catalog_product p 
+    join catalog_brand b on b.id=p.brand_id and p.currency={{currency}}
+    join brandcenter_brandcentercpg_brands bcpg on bcpg.brand_id=b.id 
+    join brandcenter_brandcentercpg cpg on cpg.id=bcpg.brandcentercpg_id and cpg.id = {{cpg_id}} and cpg.country_id={{pais}}
+group by 1,2,3,4,5,6,7,8
+order by 1
