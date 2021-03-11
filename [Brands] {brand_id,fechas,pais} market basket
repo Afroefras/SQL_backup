@@ -1,0 +1,44 @@
+with product_filter as(
+    --Sólo productos de la brand en cuestión
+    select 
+        cp.id as product_id,
+        cp.name as product_name
+    from catalog_product cp
+    where cp.brand_id = {{brand_id}}),
+
+    order_filter as(
+    --Órdenes que cuentan con algún producto filtrado
+    select 
+        op.order_id,
+        pf.product_name
+    from orders_orderproduct op
+        join product_filter pf on pf.product_id = op.product_id
+        join orders_order as o on o.id = op.order_id
+        join catalog_storebranch cs on cs.id = o.store_branch_id
+        join geo_city gc on cs.city_id = gc.id
+    where 1=1
+        and gc.country_id = {{pais}}
+        and o.actual_delivery_time>={{desde}}::date - interval '1 day'
+        and o.actual_delivery_time<{{hasta}}::date + interval '1 day'
+        and o.order_kind='NORMAL'
+        and o.status='DELIVERED'),
+    
+    total as( 
+    --Todos los productos de las órdenes filtradas
+    select 
+        o.id as order_id, 
+        opf.product_name,
+        cp.name
+    from orders_order o
+        join orders_orderproduct op on op.order_id = o.id
+        join catalog_product cp on op.product_id = cp.id
+        join order_filter opf on o.id = opf.order_id)
+
+--Cantidad de productos (y lista con cada uno) para cada órden donde hay algún producto de la brand en cuestión
+select 
+    tot.order_id,
+    tot.product_name,
+    count(tot.name) as count_prod,
+    string_agg(tot.name, ', ') as total_products
+from total tot
+group by 1,2;
