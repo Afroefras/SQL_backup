@@ -1,0 +1,38 @@
+with
+    brand_products as(
+    select 
+        b.name as brand,
+        p.id as product_id,
+        p.name as product_name,
+        p.package,
+        p.currency
+    from catalog_product p 
+        join catalog_brand b on b.id=p.brand_id and b.id in ({{brand_id}})and p.currency={{currency}}
+    group by 1,2,3,4
+    order by 1)
+select
+    to_char(op.updated at time zone sb.timezone,'YYYY-MM-DD') as date,
+    bp.brand,
+    goz.name as zone,
+    count(distinct o.user_id) as users,
+    count(distinct o.id) as orders,
+    sum(op.quantity) as units_requested,
+    sum(op.quantity_found) as units_found,
+    coalesce(sum(op.quantity_found*op.branch_price),0)::numeric as sales,
+    case when sum(op.quantity_found)/sum(op.quantity)>1 then 1 else sum(op.quantity_found)/sum(op.quantity) end as foundrate
+from brand_products bp
+    join orders_orderproduct op on op.product_id=bp.product_id
+    join orders_order o on o.id=op.order_id
+    join catalog_storebranch sb on sb.id=o.shopper_store_branch_id
+    join catalog_store s on s.id=sb.store_id
+    join geo_city gc on gc.id=sb.city_id and gc.id = {{Ciudad}}
+    join geo_opzone goz on ST_Intersects(goz.multi_poly, sb.picking_point) and not goz.deleted
+where 1=1
+    and o.status='DELIVERED'
+    and o.order_kind='NORMAL'
+    and op.updated >={{desde}}-interval '1 day'
+    and op.updated <{{hasta}}+interval '2 day'
+    and op.updated at time zone sb.timezone>= {{desde}}
+    and op.updated at time zone sb.timezone< {{hasta}}+interval '1 day'
+group by 1,2,3
+order by 1,5 desc
