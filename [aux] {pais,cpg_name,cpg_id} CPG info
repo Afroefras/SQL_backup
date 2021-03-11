@@ -1,0 +1,14 @@
+select 
+    cpg.name as cpg,
+    cpg.id as cpg_id,
+    cpg.country_id,
+    count(distinct cb.id) as "#brands",
+    string_agg(cb.name,', ') as brands,
+    string_agg(cb.id::text,', ') as brands_ids
+from  brandcenter_brandcentercpg cpg  
+    join brandcenter_brandcentercpg_brands cpb on cpb.brandcentercpg_id = cpg.id and cpg.country_id={{country}}
+    join catalog_brand cb on cb.id = cpb.brand_id
+where 1=1
+    [[and cpg.name ilike concat('%',{{cpg}},'%')]]
+    [[and cpg.id ={{cpg_id}}]]
+group by 1,2,3;
