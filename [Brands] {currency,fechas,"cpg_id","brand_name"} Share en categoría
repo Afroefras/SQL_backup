@@ -1,0 +1,66 @@
+with country_cpg_products as(
+    select 
+        b.name as brand_name,
+        --cpg.name as cpg_name,
+        c.id as category_id,
+        p.id as product_id
+    from catalog_product p 
+        join catalog_category c on c.id = p.category_id and p.currency = {{currency}}
+        join catalog_brand b on b.id = p.brand_id and [[b.name = {{brand_name}}]]),
+        --join brandcenter_brandcentercpg_brands bcpg on bcpg.brand_id = b.id 
+        --join brandcenter_brandcentercpg cpg on cpg.id = bcpg.brandcentercpg_id [[and cpg.id in ({{cpg}})]]),
+    
+    cpg_sales_by_category as (
+    select
+        to_char(op.updated at time zone gc.timezone,'YYYY-MM') as month,
+        ccp.brand_name,
+        --ccp.cpg_name,
+        c.id as category_id,
+        cl.name as category,
+        count(distinct p.id) as products,
+        coalesce(sum(op.quantity_found*op.branch_price),0)::numeric as cpg_sales
+    from country_cpg_products ccp
+        join catalog_product p on p.id = ccp.product_id and p.currency = {{currency}}  
+        join catalog_category c on c.id = p.category_id
+        join catalog_categorylocalization cl on c.id = cl.category_id and cl.language = 'en'
+        join orders_orderproduct op on op.product_id = p.id
+        join orders_order o on o.id = op.order_id
+        join geo_city gc on gc.id = o.customer_city_id
+    where 1=1
+        and o.status = 'DELIVERED'
+        and o.order_kind = 'NORMAL'
+        and op.updated >= {{desde}}-interval '1 day'
+        and op.updated < {{hasta}}+interval '2 day'
+        and op.updated at time zone gc.timezone >= {{desde}}
+        and op.updated at time zone gc.timezone < {{hasta}}+interval '1 day'
+    group by 1,2,3,4
+    order by 5 desc),
+    
+    category_sales as(
+    select
+        to_char(op.updated at time zone gc.timezone,'YYYY-MM') as month,
+        c.id as category_id,
+        coalesce(sum(op.quantity_found*op.branch_price),0)::numeric as total_sales
+    from cpg_sales_by_category csbc
+        join catalog_category c on c.id = csbc.category_id
+        join catalog_product p on p.category_id = c.id and p.currency = {{currency}}
+        join orders_orderproduct op on op.product_id = p.id
+        join orders_order o on o.id = op.order_id
+        join geo_city gc on gc.id = o.customer_city_id
+    where 1=1
+        and o.status = 'DELIVERED'
+        and o.order_kind = 'NORMAL'
+        and op.updated >= {{desde}} - interval '1 day'
+        and op.updated < {{hasta}} + interval '2 day'
+        and op.updated at time zone gc.timezone >= {{desde}}
+        and op.updated at time zone gc.timezone < {{hasta}} + interval '1 day'
+    group by 1,2)
+    
+select 
+    csbc.*,
+    cs.total_sales,
+    (sum(csbc.cpg_sales) / sum(cs.total_sales))*100 as "market share %"
+from  cpg_sales_by_category csbc 
+    join category_sales cs on cs.category_id = csbc.category_id and cs.month = csbc.month
+group by 1,2,3,4,5,6,7
+order by 6 desc;
