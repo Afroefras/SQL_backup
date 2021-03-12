@@ -1,0 +1,32 @@
+with product_filter as
+    (select
+        p.id as product_id
+    from catalog_product p 
+        join catalog_brand b on b.id = p.brand_id and p.currency = 'MXN'
+    where p.category_id = {{category_id}}
+    )
+    
+select
+    --to_char(o.actual_delivery_time at time zone sb.timezone,'YYYY-MM') as month,
+    gc.name as city,
+    count(distinct o.id) as orders,
+    count(distinct o.user_id) as users,
+    sum(op.quantity) as units_requested,
+    case when sum(op.quantity_found)/sum(op.quantity) > 1 then 1 else sum(op.quantity_found) / sum(op.quantity) end as foundrate,
+    coalesce(sum(op.quantity_found*op.branch_price), 0)::numeric as sales,
+    coalesce(sum(op.quantity_found*op.branch_price), 0)*1.00 / sum(op.quantity_found) as avg_ticket
+from product_filter pf
+    join orders_orderproduct op on op.product_id = pf.product_id
+    join orders_order o on o.id = op.order_id
+    join catalog_storebranch sb on sb.id = o.shopper_store_branch_id
+    join catalog_store s on s.id = sb.store_id
+    join geo_city gc on gc.id = sb.city_id
+where 1=1
+    and o.status = 'DELIVERED'
+    and o.order_kind = 'NORMAL'
+    and o.actual_delivery_time >= {{desde}} - interval '1 day'
+    and o.actual_delivery_time < {{hasta}} + interval '2 day'
+    and o.actual_delivery_time at time zone sb.timezone >= {{desde}}
+    and o.actual_delivery_time at time zone sb.timezone < {{hasta}} + interval '1 day'
+group by 1--,2
+order by 1 asc, 3 desc;
