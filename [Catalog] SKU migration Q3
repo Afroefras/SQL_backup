@@ -1,0 +1,2 @@
+-- Here are the rules for the store consulted
+select extra, extra_data from supply_storeinfo where 1=1 [[and sku_source = {{sku_source}}]] limit 4
