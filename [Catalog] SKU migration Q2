@@ -1,0 +1,13 @@
+-- Now check how many new sku we have mapped
+select 
+    distinct sp.name as product_name,
+    sp.catalog_product_id,
+    case when sp.catalog_product_id is not null then 1 else 0 end mapped_to_catalog
+from supply_product sp
+    join supply_productbranch spb on sp.id = spb.product_id
+where 1=1
+    [[and sp.sku_source = {{sku_source}}]]
+    and sp.catalog_product_id is null
+    and spb.last_visited >= now() - interval '3 days'
+    -- put inside the parenthesis all product_id's resulting from merging the last query with the migration file
+    and sp.sku in ()
