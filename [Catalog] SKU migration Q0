@@ -1,0 +1,4 @@
+-- First, check the sku-source name
+select store_id, sku_source, is_active
+from supply_storeinfo
+where  sku_source ilike '%big%' -- search for the sku_source name
