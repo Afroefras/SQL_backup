@@ -1,0 +1,12 @@
+-- Then get the catalog as csv
+select 
+    ss.store_id,
+    sp.sku, 
+    spbar.barcode, 
+    sp.id supply_product_id, 
+    sp.catalog_product_id
+from supply_product sp
+    left join supply_productbarcode spbar on sp.id = spbar.product_id
+    join supply_storeinfo ss on ss.sku_source = sp.sku_source
+where sp.sku_source = {{sku_source}} -- search all the catalog with the exact name found in last query
+    and sp.catalog_product_id is not null
