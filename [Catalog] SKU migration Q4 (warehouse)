@@ -1,0 +1,53 @@
+select *
+, times_found::numeric/times_ordered as found_rate
+from (
+select
+cd.*,
+case
+when cd.status is null and sd.catalog_product_id is not null then 'No ProductBranch'
+when cd.status is null and sd.catalog_product_id is null then 'Unmapped'
+else cd.status
+end as status_info,
+case
+when (cd.availability_status in ('AVAILABLE') or cd.availability_status is null) and cd.product_id is not null then 'True (Available)'
+when (cd.availability_status in ('FREQUENTLY_OUT_OF_STOCK')) and cd.product_id is not null then 'True (FOOS)'
+when cd.availability_status in ('OUT_OF_STOCK') then 'False (OOS)'
+when cd.availability_status is null and sd.catalog_product_id is null then 'False (Unmapped)'
+when cd.availability_status is null and sd.catalog_product_id is not null then 'False (No ProductBranch)'
+else 'False (Other)'
+end as purchasable,
+
+ case 
+        when sd.catalog_product_id is not null and sd.min_last_visit > {{last_visit_threshold}} then 'True'
+        when sd.catalog_product_id is not null and sd.min_last_visit <= {{last_visit_threshold}} then 'False (stop send)'
+        when sd.catalog_product_id is null then 'False (unmapped)'
+        end as mapped,
+        
+        sd.min_last_visit, 
+    /*case 
+        when cateogry_id in (137,134,135,25,26,27,986,149,910,546,1009,979,912,425,323,152,485,324,17,20,538,79,531,136) then 'yellow'
+        else 'other'
+        end as category_group,*/
+        
+    case 
+        when sum(coalesce(sd.stock, 0)) > 0 then 'True'
+        when sum(sd.stock) = 0 and count(*) filter (where sd.stock is not null) <> 0 then 'False'
+        else 'No Info'
+        end as stock_,
+    
+    case 
+        when sum(coalesce(sd.stock, 0)) > {{available_threshold}}::numeric then 'AV'
+        when sum(coalesce(sd.stock, 0)) > {{oos_threshold}}::numeric then 'FOOS'
+        when sum(coalesce(sd.stock, 0)) <= {{oos_threshold}}::numeric then 'OOS'
+        when sum(coalesce(sd.stock, 0)) < 0 then 'Negative'
+        else 'No Info'
+        end as stock_label
+    
+from catalog_supply.temporary_catalog_data cd
+full outer join catalog_supply.temporary_supply_data sd on cd.product_id = sd.catalog_product_id and sd.branch = cd.branch_id --comment sd-branch = cd.branch_id if integration does not have branch info
+where cd.store_id = {{store_id}}-- and cd.branch_id in (4029) -- uncomment this part to filter a branch
+group by 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29, 30
+) j
+
+where status_info = 'ACTIVE'
+and mapped = 'False (stop send)'
