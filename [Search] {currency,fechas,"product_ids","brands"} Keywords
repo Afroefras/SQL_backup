@@ -1,0 +1,15 @@
+select
+    b.name as brand_name,
+    p.id as product_id,
+    p.name as product_name,
+    psc.search_term,
+    count(psc.search_term) as busquedas,
+    count(distinct psc.user_id) as users,
+    count(psc.search_term)*1.00 / count(distinct psc.user_id) as busquedas_p_user
+from search_productsearchconversion psc 
+    join catalog_product p on p.id=psc.product_id and p.currency = {{currency}} [[and p.id in ({{products_id}})]]
+    join catalog_brand b on b.id = p.brand_id [[and b.name ~* {{brand_names}}]]
+where 1=1
+    and psc.created between {{desde}} and {{hasta}}
+group by 1,2,3,4
+order by 5 desc;
