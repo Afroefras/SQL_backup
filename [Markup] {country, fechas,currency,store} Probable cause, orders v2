@@ -1,0 +1,137 @@
+--Carrefour Bairro: 5048
+--Carrefour Pamplona: 4100
+--Carrefour Drogaria: 6974
+--Prezunic: 4878
+--Carrefour Hiper: 1327
+--Atacadão: 3101
+--BIG: 1481
+
+select
+    f.cause,
+    case when f.order_markup < 0 then 'Markdown' else 'Markup' end as markup_kind,
+    sum(f.order_markup) as total_markup,
+    sum(f.receipt_after_taxes) as total_receipt,  
+    count(f.order_id) qty_orders
+from
+    (select 
+        db.order_id,
+        db.order_markup as order_markup1,
+        db.receipt_after_taxes,
+        case
+            when db.receipt_after_taxes = db.total_products_wo_store_markup then 'No markup'
+            -- when db.consolidated_order = 0 then 'Non consolidated order'
+            when abs(db.order_markup) between 0.9*db.order_discount and 1.1*db.order_discount then 'Wrong promo applied'
+            when db.qty_receipts>1 and abs(db.markup_pctg) between 0.47 and 0.53 then 'Duplicated Receipt'
+            when db.qty_receipts>1 and abs(db.markup_pctg) > 0.25 then 'Multiple Receipt'
+            when db.same_branch = 0 and abs(db.markup_pctg) between 0.9 and 1.1 then 'Different branch'
+            when db.same_day = 0 and abs(db.markup_pctg) between 0.9 and 1.1 then 'Different day'
+            else 'Different Price/Product' end cause,
+            
+        -- ASIGNATION
+        case 
+            when db.receipt_after_taxes = db.total_products_wo_store_markup then 0
+            -- when db.consolidated_order = 0 then 'Non consolidated order'
+            when abs(db.order_markup) between 0.9*order_discount and 1.1*db.order_discount then db.order_markup
+            when db.qty_receipts>1 and abs(db.markup_pctg) between 0.47 and 0.53 then db.order_markup
+            when db.qty_receipts>1 and abs(db.markup_pctg) > 0.25 then db.order_markup
+            when db.same_branch = 0 and abs(db.markup_pctg) between 0.9 and 1.1 then db.order_markup
+            when db.same_day = 0 and abs(db.markup_pctg) between 0.9 and 1.1 then db.order_markup
+            else db.order_markup end order_markup
+        
+    from
+        (select
+            o.id order_id,
+            sd.discount as order_discount,
+            case when o.total_receipt is not null then 1 else 0 end as consolidated_order,
+            case when o.shopper_store_branch_id = o.store_branch_id then 1 else 0 end as same_branch,
+            case when o.created::date = o.actual_delivery_time::date then 1 else 0 end as same_day,
+            count(ror.order_id) as qty_receipts,
+            case
+                when cs.country in ('CA', 'US') then sum(coalesce(cg.value::numeric, fv.value::numeric, ror.shopper_total, 0)) 
+                else coalesce(o.total_receipt, o.shopper_total_receipt) end as receipt_after_taxes,
+            (o.total - o.delivery_charged - coalesce(och_m.price_charged, 0) + coalesce(d.discount, 0))/(1 + coalesce(csb.markup_pctg, 0)/100) as total_products_wo_store_markup,
+            (o.total - o.delivery_charged - coalesce(och_m.price_charged, 0) + coalesce(d.discount, 0))/(1 + coalesce(csb.markup_pctg, 0)/100) - (case 
+                    when cs.country in ('CA', 'US') then sum(coalesce(cg.value::numeric, fv.value::numeric, ror.shopper_total, 0)) 
+                    else coalesce(o.total_receipt, o.shopper_total_receipt) end) as order_markup,
+            ((o.total - o.delivery_charged - coalesce(och_m.price_charged, 0) + coalesce(d.discount, 0))/(1 + coalesce(csb.markup_pctg, 0)/100) - (case 
+                    when cs.country in ('CA', 'US') then sum(coalesce(cg.value::numeric, fv.value::numeric, ror.shopper_total, 0)) 
+                else coalesce(o.total_receipt, o.shopper_total_receipt) end))/ greatest(coalesce(o.total_receipt, o.shopper_total_receipt), 1)::numeric as markup_pctg
+        from catalog_store cs 
+            join catalog_storebranch csb on csb.store_id = cs.id
+            join orders_order o on o.store_branch_id = csb.id
+            left join orders_chargeableitem och_m on och_m.order_id = o.id and och_m.type = 'MARKUP'
+            left join receipts_orderreceipt ror on ror.order_id = o.id and ror.valid
+            left join consolidator_goal cg on ror.id = cg.target_id and cg.target_content_type_id = 120 and cg.check_type_id = 40 and cg.consolidated
+            left join common_eventoperation ceo on ceo.reference_content_type_id = 25 and ceo.reference_id = o.id and ceo.operation_type = 'ORDER_SET_AS_FREE_OF_CHARGE'
+            left join
+                (select 
+                    fv.receipt_id,
+                    fv.value
+                from receipts_orderreceiptfieldvalue fv
+                    join receipts_storereceiptfielddefinition fd on fv.field_definition_id = fd.id and fd.name = 'total_after_taxes'
+                )
+                fv on ror.id = fv.receipt_id
+                
+            left join 
+                (select 
+                    coalesce(sum(discount), 0) as discount,
+                    order_id
+                from promotions_ordercampaign oc
+                    join orders_order o on o.id = order_id
+                    join catalog_storebranch csb on o.shopper_store_branch_id = csb.id
+                where not exists
+                   (select 1
+                    from promotions_freedeliverycampaign fc
+                    where campaign_ptr_id = oc.campaign_id
+                      and not o.with_subscription
+                    union
+                    select 1
+                    from promotions_campaign pc
+                    where 1=1 
+                        and is_store_promotion
+                        and oc.campaign_id=pc.id
+                        and pc.country = {{country}}
+                    )
+                    
+                    and o.actual_delivery_time between {{start_date}} - interval '2 day' and {{end_date}} + interval '2 day'
+                group by order_id
+                ) 
+                d on  d.order_id = o.id 
+                
+            left join 
+                (select 
+                    coalesce(sum(discount), 0) as discount,
+                    order_id,
+                    case when sum(case when oc.campaign_id = 22388 then 1 else 0 end) > 0 then 1 else 0 end has_promo_2x1
+                from promotions_ordercampaign oc
+                    join orders_order o on o.id=order_id
+                    join catalog_storebranch csb on o.shopper_store_branch_id = csb.id
+                where exists
+                   (select 1
+                    from promotions_campaign pc
+                    where 1=1 
+                        and is_store_promotion
+                        and oc.campaign_id=pc.id 
+                        and pc.country = {{country}}
+                    )
+                    
+                    and o.actual_delivery_time between {{start_date}} - interval '2 day' and {{end_date}} + interval '2 day'
+                group by order_id
+                ) 
+                sd on o.id = sd.order_id  
+                
+        where 1=1
+            and o.status = 'DELIVERED'
+            and o.order_kind = 'NORMAL'  
+            and o.currency = {{currency}}
+            and cs.country = {{country}}
+            and ceo.reference_id is null
+            [[and cs.id = {{store_id}}]]
+            and (o.actual_delivery_time at time zone csb.timezone)::date between {{start_date}} and {{end_date}}
+        group by 1,2,3,4,8, cs.country
+        ) db
+        
+    where db.consolidated_order = 1
+    ) f
+group by 1,2
+order by 3;
