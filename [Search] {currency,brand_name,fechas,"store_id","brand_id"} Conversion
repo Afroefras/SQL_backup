@@ -1,0 +1,18 @@
+select
+    s.country,
+    b.id as brand_id,
+    b.name as brand,
+    psc.search_term,
+    count(product_id) as productos,
+    count(psc.search_term) as busquedas,
+    count(distinct psc.user_id) as users
+from search_productsearchconversion psc 
+    join catalog_product p on p.id=psc.product_id and p.currency={{currency}}
+    join catalog_brand b on b.id=p.brand_id and b.name ilike concat('%',{{brand_name}},'%')
+    join catalog_storebranch sb on sb.id=psc.branch_id
+    join catalog_store s on s.id=sb.store_id and s.country={{country}}
+    [[and s.id in ({{store_id}})]]
+    [[and b.id in ({{brand_id}})]]
+where psc.created between {{desde}} and {{hasta}}
+group by 1,2,3,4
+order by 1,5 desc;
