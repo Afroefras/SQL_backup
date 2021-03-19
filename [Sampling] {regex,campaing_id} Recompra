@@ -1,0 +1,55 @@
+--'([N|n]eurobi[ó|o]n) Tab' 450
+--'[H|h]eal ([C|c]ream)' 460
+--'[G|g]olden [N|n]uts' 510 -- sí hay recompras
+
+with product_filter as(
+    select
+        p.id as product_id,
+        p.name,
+        unnest(REGEXP_MATCHES(p.name, {{regex}})) as product
+    from catalog_product p
+    where p.currency='MXN'),
+    
+    campaign_info as (
+    select
+        (o.actual_delivery_time)::date received_at,  
+        o.user_id,   
+        o.id as order_id,
+        sd.campaign_id,
+        sc.name as sampling_campaign,
+        sc.product_id,
+        ROW_NUMBER () OVER (PARTITION BY o.user_id ORDER BY order_id) order_rank
+	from sampling_samplingdelivery sd 
+	    join sampling_samplingcampaign sc on sc.id = sd.campaign_id
+	    join orders_order o on o.id = sd.order_id
+	where sd.campaign_id={{campaign_id}}
+	    and sd.status='DELIVERED'
+	    and o.status='DELIVERED'),
+	    
+	target_users as (
+	select
+        o.id as order_id, 
+		o.user_id,
+		op.product_id,
+		(o.actual_delivery_time)::date resale_at
+	from orders_order o 
+		join campaign_info ci on ci.user_id = o.user_id and order_rank = 1
+		join orders_orderproduct op on op.order_id = o.id and op.product_id in (select product_id from product_filter)
+	where  o.status = 'DELIVERED'
+		and o.order_kind = 'NORMAL'
+		--se compró después de recibir el sampling
+		and (o.actual_delivery_time)::date > ci.received_at
+		--se compró a lo más 30 días después de recibir el sampling
+		and (o.actual_delivery_time)::date < ci.received_at + interval '30 days') 
+		
+select 
+    ci.campaign_id,
+    ci.sampling_campaign,
+    ci.product_id as sampling_product_id,
+    pf.name as product_name,
+    count(distinct ci.user_id) as sampling_users,
+    count(distinct tpu.user_id) --filter (where ci.received_at < tpu.resale_at) as users_product_repurchase
+from campaign_info ci 
+    left join target_users tpu on tpu.user_id = ci.user_id
+    left join product_filter pf on pf.product_id = tpu.product_id
+group by 1,2,3,4;
