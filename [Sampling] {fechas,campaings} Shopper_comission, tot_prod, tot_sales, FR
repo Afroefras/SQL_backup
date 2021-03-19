@@ -1,0 +1,28 @@
+select 
+    to_char(o.actual_delivery_time,'YYYY-MM') as month,
+    sc.id as campaign_id,
+    sc.name as campaign_name,
+    cp.id as product_id,
+    cp.name as product_name,
+    cb.id as brand_id,
+    cb.name as brand_name,
+    --cpg.name as cpg_name,
+    sum(sc.shopper_commission) as total_shopper_commission,
+    sum(o.qty_products_found) + sum(o.qty_products_replaced) as total_products_delivered,
+    sum(total_receipt) as total_sales,
+    sum(o.qty_products_found)*1.00 / sum(o.qty_products_ordered) as found_rate
+from sampling_samplingdelivery sd
+    join orders_order o on o.id = sd.order_id
+    join sampling_samplingcampaign sc on sc.id = sd.campaign_id
+    join catalog_product cp on cp.id = sc.product_id
+    join catalog_brand cb on cb.id = cp.brand_id
+    join brandcenter_brandcentercpg_brands cpb on cpb.brand_id = cb.id
+    join brandcenter_brandcentercpg cpg on cpg.id = cpb.brandcentercpg_id
+where 1=1
+    [[and sd.campaign_id in ({{campaign_id}})]]
+    and o.status = 'DELIVERED'
+    and o.order_kind = 'NORMAL'
+    and o.actual_delivery_time >= {{desde}} - interval '1 day'
+    and o.actual_delivery_time < {{hasta}} + interval '2 day'
+group by 1,2,3,4,5,6,7--,8
+order by 1;
