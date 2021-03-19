@@ -1,0 +1,61 @@
+with product_filter as(
+    select
+        b.id as brand_id,
+        b.name as brand_name,
+        p.id as product_id,
+        p.name,
+        p.package
+    from catalog_product p 
+        join catalog_brand b on b.id=p.brand_id
+    where 1=1
+        and p.currency='MXN'
+        ),
+        
+    campaign_info as (
+    select
+        (o.actual_delivery_time)::date as received_at,  
+        sd.user_id,
+        o.id as order_id,
+        sd.campaign_id,
+        sc.name as sampling_campaign,
+        ROW_NUMBER () OVER (PARTITION BY o.user_id ORDER BY order_id) as order_rank
+	from sampling_samplingdelivery sd
+	    join sampling_samplingcampaign sc on sc.id = sd.campaign_id
+	    join orders_order o on o.id = sd.order_id
+	where sd.campaign_id in ({{campaign_id}})
+	    and sd.status = 'DELIVERED'
+	    and o.status = 'DELIVERED'
+	    ),
+	    
+	target_users as (
+	select
+        o.id as order_id, 
+		o.user_id,
+		op.product_id,
+		(o.actual_delivery_time)::date resale_at
+	from orders_order o
+		join campaign_info ci on ci.user_id = o.user_id and order_rank = 1
+		join orders_orderproduct op on op.order_id = o.id and op.product_id in (select product_id from product_filter)
+		join catalog_storebranch sb on sb.id = o.store_branch_id and sb.store_id = {{store_id}}
+	where  o.status = 'DELIVERED'
+		and o.order_kind = 'NORMAL'
+		--se compró después de recibir el sampling
+		and (o.actual_delivery_time)::date > ci.received_at
+		--se compró a lo más N días después de recibir el sampling
+		and (o.actual_delivery_time)::date < ci.received_at + interval '15 days'
+		) 
+		
+select 
+    ci.campaign_id,
+    ci.sampling_campaign,
+    pf.name as product_name,
+    pf.package as product_package,
+    (select count(distinct user_id) from campaign_info) as sampling_users,
+    --count(distinct ci.user_id) as sampling_users,
+    count(distinct tpu.user_id) as repurchase_users,
+    count(tpu.product_id) as total_products
+from campaign_info ci
+    join target_users tpu on ci.user_id = tpu.user_id
+    join product_filter pf on pf.product_id = tpu.product_id
+where pf.name is not null
+group by 1,2,3,4;
