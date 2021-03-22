@@ -1,0 +1,114 @@
+with campaigns as 
+    (
+    select 
+        pp.id as project_id,
+        pp.name as project_name,
+        cpg.name as cpg,
+        dct.model,
+        c.id as campaign_id,
+        c.name as campaign
+    from promotions_promotionalprojectcomponent ppc --discount,freedelivery,saving,volumediscount,volumepricediscount
+    join promotions_promotionalproject pp on pp.id = ppc.promotional_project_id and ppc.component_content_type_id in (241,245,351,310,565) and pp.id in ({{project_id}})
+    join django_content_type dct on dct.id=ppc.component_content_type_id 
+    join promotions_campaign c on c.id=ppc.component_id
+    join brandcenter_brandcentercpg cpg on cpg.id=c.cpg_id
+    group by 1,2,3,4,5,6
+    ),
+    
+    products as 
+    (select 
+        pbp.campaign_id,
+        pb.product_id
+    from promotions_productbranchpromotion pbp
+        join catalog_productbranch pb on pb.id=pbp.product_branch_id and pbp.campaign_id in (select campaign_id from campaigns)
+    group by 1,2
+    ),
+    
+    orders as
+    (select 
+    (o.actual_delivery_time at time zone sb.timezone)::date as date,
+    ca.project_id,
+    ca.project_name,
+    ca.cpg,
+    ca.model,
+    ca.campaign_id,
+    ca.campaign,
+    o.external_id,
+    o.id as order_id,
+    o.with_subscription,
+    o.user_id,
+    s.name as store,
+    sb.name as branch,
+    gc.name as city,
+    oc.discount
+    from promotions_ordercampaign oc
+    join orders_order o on o.id=oc.order_id and o.status='DELIVERED'
+    join campaigns ca on ca.campaign_id=oc.campaign_id
+    join catalog_storebranch sb on sb.id=o.shopper_store_branch_id
+    join catalog_store s on s.id=sb.store_id
+    join geo_city gc on gc.id=sb.city_id
+    ),
+    
+    detalle as 
+    (select t1.* ,
+    case when external_id=lag(external_id) over (partition by campaign_id order by external_id) then 0 else 1 end as unique_orders,
+    case when user_id=lag(user_id) over (partition by campaign_id order by user_id) then 0 else 1 end as unique_users,
+    case when external_id=lag(external_id) over (partition by campaign_id order by external_id) then 0 else 1*t1.order_budget_used end as unique_order_budget_used
+    from 
+        (select 
+            ord.date,
+            ord.store,
+            ord.branch,
+            ord.city,
+            ord.external_id,
+            ord.with_subscription,
+            ord.user_id,
+            ord.cpg,
+            ord.project_id,
+            ord.project_name,
+            ord.campaign_id,
+            ord.campaign,
+            ord.model,
+            b.name as brand,
+            p.id as product_id,
+            p.name as product_name,
+            p.barcodes,
+            p.package,
+            coalesce(op2.quantity,0) as requested,
+            coalesce(op2.quantity_found,0) as found,
+            coalesce(op3.quantity_found,0) as replaced,
+            op.quantity_found as delivered,
+            coalesce(op2.quantity_found,0)*1.00 /greatest(op2.quantity,1) as foundrate,
+            op.branch_price*op.quantity_found as sales,
+            ord.discount as order_budget_used
+        from orders ord
+            join orders_orderproduct op on op.order_id=ord.order_id
+            join products pr on pr.product_id=op.product_id and pr.campaign_id=ord.campaign_id
+            join catalog_product p on p.id=op.product_id
+            left join orders_orderproduct op2 on op2.order_id=ord.order_id and op2.product_id=pr.product_id and op2.created_by='CUSTOMER'
+            left join orders_orderproduct op3 on op3.order_id=ord.order_id and op3.product_id=pr.product_id and op3.created_by='SHOPPER' 
+            left join catalog_brand b on b.id=p.brand_id
+        group by 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25--,25,26
+        ) t1
+    )
+    
+select 
+    project_id,
+    project_name,
+    model,
+    campaign_id,
+    campaign,
+    coalesce(sum(unique_orders) filter (where with_subscription),0) as pop_orders,
+    sum(unique_orders) as orders,
+    sum(unique_users) as users,
+    sum(unique_order_budget_used) as budget_used,
+    sum(requested) as requested,
+    sum(found) as found,
+    sum(replaced) as replaced,
+    sum(delivered) as delivered,
+    sum(found)/sum(requested)::numeric as foundrate,
+    sum(sales) as sales,
+    sum(sales)/sum(unique_orders) as avg_ticket
+from detalle
+group by 1,2,3,4,5
+order by 1;
