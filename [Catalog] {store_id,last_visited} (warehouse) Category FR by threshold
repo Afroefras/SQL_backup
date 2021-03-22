@@ -1,0 +1,68 @@
+--QUERY PARA EL FR ABOVE
+select
+  branch_name||' (' ||branch_id||')' as "branch name (branch_id)",
+    supply_category,
+    branch_id,
+    s as stock_threshold,
+    branch_name||' (' ||branch_id||')' ||'-'|| supply_category||'-'||s as key,
+    
+    count(*) as total_products,
+    
+    count(*) filter (where stock <= s) as products_under_threshold,
+    count(*) filter (where stock > s) as products_above_threshold,
+    
+    sum(times_ordered) filter (where stock <= s) as orders_under_threshold,
+    sum(times_ordered) filter (where stock > s) as orders_above_threshold,
+    
+    sum(times_found) filter (where stock <= s)::numeric / sum(times_ordered) filter (where stock <= s) as found_rate_under_threshold,
+    sum(times_found) filter (where stock > s)::numeric / sum(times_ordered) filter (where stock > s) as found_rate_above_threshold
+from (
+    select
+        cd.*,
+        sd.supply_category,
+        case
+            when cd.status is null and sd.catalog_product_id is not null then 'No ProductBranch'
+            when cd.status is null and sd.catalog_product_id is null then 'Unmapped'
+            else cd.status
+            end as status_info,
+        case
+            when (cd.availability_status in ('AVAILABLE') or cd.availability_status is null) and cd.product_id is not null then 'True (Available)'
+            when (cd.availability_status in ('FREQUENTLY_OUT_OF_STOCK')) and cd.product_id is not null then 'True (FOOS)'
+            when cd.availability_status in ('OUT_OF_STOCK') then 'False (OOS)'
+            when cd.availability_status is null and sd.catalog_product_id is null then 'False (Unmapped)'
+            when cd.availability_status is null and sd.catalog_product_id is not null then 'False (No ProductBranch)'
+            else 'False (Other)'
+            end as purchasable,
+            
+        case 
+            when /*sd.catalog_product_id is not null and */max(sd.min_last_visit) > {{last_visit}} then 'True'
+            when /*sd.catalog_product_id is not null and*/ max(sd.min_last_visit) >= {{last_visit}} then 'False (stop send)'
+            when max(sd.min_last_visit) is null then 'False (unmapped)'
+            else 'Unknown'
+            end as mapped,
+            
+        case 
+            when sum(coalesce(sd.stock, 0)) > 0 then 'True'
+            when sum(sd.stock) = 0 and count(*) filter (where sd.stock is not null) <> 0 then 'False'
+            else 'No Info'
+            end as stock_,
+        case 
+            when max(sd.min_last_visit) is null then 'UNMAPPED'
+            when max(sd.min_last_visit) >= {{last_visit}} then 'STOP SEND'
+            else 'OK'
+            end as integration_action,
+        
+        max(sd.min_last_visit) as last_visit,
+        sum(sd.stock) as stock
+        
+    from catalog_supply.temporary_catalog_data cd
+    full outer join catalog_supply.temporary_supply_data sd on cd.product_id = sd.catalog_product_id and sd.branch = cd.branch_id
+    where cd.store_id = {{store_id}}
+    group by 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29
+    ) j
+join generate_series(0,36,2) as s on true
+where 
+    status_info in ('ACTIVE') and supply_category is not null and branch_id is not null
+group by 1,2,3,4,5
+having s between min(stock) filter (where times_ordered > 0) and max(stock) filter (where times_ordered > 0)
+order by 1,2,4;
