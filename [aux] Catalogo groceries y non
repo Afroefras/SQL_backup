@@ -1,0 +1,8 @@
+select 
+    s.country,
+    s.name, 
+    case when sci.collection_id = 13 then 'Non' else 'Groceries' end as store_type
+from catalog_store s
+    join catalog_storecollectionitem sci on sci.store_id = s.id
+    join catalog_storecollection sc on sc.id = sci.collection_id
+order by 1,3,2;
