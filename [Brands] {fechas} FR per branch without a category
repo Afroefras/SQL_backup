@@ -1,12 +1,16 @@
 select
+    to_char(o.actual_delivery_time at time zone sb.timezone,'yyyy-mm-dd') as date,
     s.id as store_id,
     s.name as store_name,
     sb.id as store_branch_id,
     sb.slug as store_branch_name,
     count(distinct o.id) as total_orders,
-    sum(o.qty_products_found)*1.00 / sum(o.qty_products_ordered) as found_rate_original,
-    count(op.quantity_found) filter(where op.quantity_found > 0)*1.00 / count(op.quantity) as found_rate_items,
-    sum(op.quantity_found)*1.00 / sum(op.quantity) as found_rate_qty
+    sum(o.qty_products_found) as products_found,
+    sum(o.qty_products_ordered) as products_ordered,
+    count(op.quantity_found) filter(where op.quantity_found > 0) as items_found,
+    count(op.quantity) as items_ordered,
+    sum(op.quantity_found) as qty_found,
+    sum(op.quantity) as qty_ordered
 from orders_orderproduct op
     join orders_order o on o.id = op.order_id
         and o.currency = 'BRL'
@@ -16,10 +20,10 @@ from orders_orderproduct op
         and o.order_kind = 'NORMAL'
     join catalog_product p on p.id = op.product_id
         and p.category_id != 1526
-    join catalog_storebranch sb on sb.id = o.store_branch_id 
+    join catalog_storebranch sb on sb.id = o.store_branch_id
         and o.actual_delivery_time at time zone sb.timezone >= {{desde}} 
         and o.actual_delivery_time at time zone sb.timezone < {{hasta}} + interval '1 day'
     join catalog_store s on s.id = sb.store_id 
         and s.country = 'BR'
-group by 1,2,3,4
-order by 1,5;
+group by 1,2,3,4,5
+order by 1 asc, 6 desc;
