@@ -26,4 +26,4 @@ from orders_orderproduct op
     join catalog_store s on s.id = sb.store_id 
         and s.country = 'BR'
 group by 1,2,3,4,5
-order by 1 asc, 6 desc;
+order by 1,2 asc, 6 desc;
