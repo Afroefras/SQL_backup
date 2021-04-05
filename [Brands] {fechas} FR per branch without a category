@@ -3,6 +3,7 @@ select
     s.name as store_name,
     sb.id as store_branch_id,
     sb.slug as store_branch_name,
+    count(distinct o.id) as total_orders,
     sum(o.qty_products_found)*1.00 / sum(o.qty_products_ordered) as found_rate_original,
     count(op.quantity_found) filter(where op.quantity_found > 0)*1.00 / count(op.quantity) as found_rate_items,
     sum(op.quantity_found)*1.00 / sum(op.quantity) as found_rate_qty
