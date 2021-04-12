@@ -1,6 +1,6 @@
 select
-    --to_char(o.actual_delivery_time at time zone sb.timezone,'yyyy-mm-dd') as delivery_date,
-    gc.name as city_name,
+    gc.name as city,
+    goz.name as zone,
     count(distinct o.id) as total_orders,
     count(op.quantity_found) filter(where op.quantity_found > 0) as items_found,
     count(op.quantity) as items_ordered,
@@ -9,18 +9,20 @@ select
 from orders_orderproduct op
     join catalog_product p on p.id = op.product_id
     join orders_order o on o.id = op.order_id
-    join sampling_samplingdelivery sd on sd.order_id = o.id
     join catalog_storebranch sb on sb.id = o.shopper_store_branch_id
     join geo_city gc on gc.id = sb.city_id
+    join orders_orderaddress oa on oa.order_id=o.id
+    join geo_opzone goz on ST_Intersects(goz.multi_poly, oa.location)
 where 1=1
     [[and p.category_id = {{category_id}}]]
     [[and p.brand_id = {{brand_id}}]]
-    [[and sd.campaign_id in ({{sampling_campaign}})]]
+    and oa.country = 'MX'
     and o.currency = 'MXN'
     and o.actual_delivery_time >= {{desde}} - interval '1 day' 
     and o.actual_delivery_time < {{hasta}} + interval '2 day'
     and o.actual_delivery_time at time zone sb.timezone between {{desde}} and {{hasta}} + interval '1 day'
     and o.status = 'DELIVERED'
     and o.order_kind = 'NORMAL'
-group by 1--,2
-order by 1,2 desc;
+    and not goz.deleted
+group by 1,2
+order by 1 asc, 3 desc;
