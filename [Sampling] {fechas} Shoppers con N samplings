@@ -1,4 +1,6 @@
 select
+    a.city,
+    a.zone,
     lpad(a.sampling_orders::text, 2, '0') as orders_with_samplings,
     count(a.user_id) as shoppers,
     sum(a.orders) as total_orders,
@@ -6,17 +8,22 @@ select
 from (
     select 
         s.user_id,
+        gc.name as city,
+        goz.name as zone,
         count(distinct o.id) as orders,
         count(distinct sd.order_id) as sampling_orders
     from shoppers_shopper s
         join orders_order o on o.shopper_delivery_id = s.user_id
+        join catalog_storebranch sb on sb.id = o.shopper_store_branch_id
+        join geo_city gc on gc.id = sb.city_id
+        join orders_orderaddress oa on oa.order_id=o.id
+        join geo_opzone goz on ST_Intersects(goz.multi_poly, oa.location)
         left join sampling_samplingdelivery sd on sd.order_id = o.id
     where 1=1
         and o.currency = 'MXN'
         and o.actual_delivery_time >= {{desde}} - interval '1 day' 
         and o.actual_delivery_time < {{hasta}} + interval '2 day'
         and o.shopper_delivery_id = o.shopper_picking_id
-    group by 1
+    group by 1,2,3
     ) a
-group by 1
-order by 1;
+group by 1,2,3;
