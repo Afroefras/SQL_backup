@@ -7,7 +7,7 @@ select
     count(op.quantity) as items_ordered,
     count(op.quantity_found) filter(where op.quantity_found > 0)*1.00 / count(distinct o.id) as avg_found,
     count(op.quantity)*1.00 / count(distinct o.id) as avg_ordered,
-    sum(op.branch_price*op.quantity_found)*1.00 / (count(op.order_id) filter(where op.quantity_found > 0)) as avg_ticket
+    sum(op.branch_price*op.quantity_found)*1.00 / (count(distinct op.order_id) filter(where op.quantity_found > 0)) as avg_ticket
 from orders_orderproduct op
     join catalog_product p on p.id = op.product_id
     join orders_order o on o.id = op.order_id
