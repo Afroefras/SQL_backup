@@ -1,0 +1,22 @@
+select
+    lpad(a.sampling_orders::text, 2, '0') as n_samplings,
+    count(a.user_id) as shoppers,
+    sum(a.orders) as total_orders,
+    avg(a.orders)*1.00 as avg_orders
+from (
+    select 
+        s.user_id,
+        count(distinct o.id) as orders,
+        count(distinct sd.order_id) as sampling_orders
+    from shoppers_shopper s
+        join orders_order o on o.shopper_delivery_id = s.user_id
+        left join sampling_samplingdelivery sd on sd.order_id = o.id
+    where 1=1
+        and o.currency = 'MXN'
+        and o.actual_delivery_time >= {{desde}} - interval '1 day' 
+        and o.actual_delivery_time < {{hasta}} + interval '2 day'
+        and o.shopper_delivery_id = o.shopper_picking_id
+    group by 1
+    ) a
+group by 1
+order by 1;
