@@ -1,18 +1,38 @@
-select
-    s.country,
-    b.id as brand_id,
-    b.name as brand,
-    psc.search_term,
-    count(product_id) as productos,
-    count(psc.search_term) as busquedas,
-    count(distinct psc.user_id) as users
-from search_productsearchconversion psc 
-    join catalog_product p on p.id=psc.product_id and p.currency={{currency}}
-    join catalog_brand b on b.id=p.brand_id and b.name ilike concat('%',{{brand_name}},'%')
-    join catalog_storebranch sb on sb.id=psc.branch_id
-    join catalog_store s on s.id=sb.store_id and s.country={{country}}
-    [[and s.id in ({{store_id}})]]
-    [[and b.id in ({{brand_id}})]]
-where psc.created between {{desde}} and {{hasta}}
-group by 1,2,3,4
-order by 1,5 desc;
+select 
+    s.query,
+    c.brand_name,
+    sum(s.total_queries) total_queries,
+    sum(coalesce(c.total_conversions,0)) total_conversions,
+    sum(coalesce(c.total_conversions,0))::float / sum(s.total_queries) conversion_rate
+from (
+    select
+        sl.query,
+        count(sl.id) as total_queries
+    from search_searchlog sl 
+        join catalog_storebranch csb on sl.branch_id = csb.id
+        join catalog_store cs on csb.store_id = cs.id
+    where 1=1
+        and sl.created >= {{desde}}
+        and sl.created < {{hasta}}
+        and cs.country = {{country}}
+    group by 1
+    ) s
+    
+    join (
+        select
+            b.name as brand_name,
+            sc.search_term as query,
+            count(sc.id) as total_conversions
+        from search_productsearchconversion sc
+            join catalog_product p on p.id = sc.product_id
+            join catalog_brand b on b.id = p.brand_id
+        where 1=1
+            and sc.created >= {{desde}}
+            and sc.created < {{hasta}}
+            and p.currency = {{currency}}
+            [[and b.id in ({{brand_id}})]]
+            [[and sc.search_term ~* {{search_terms}}]]
+        group by 1,2
+        ) c on c.query = s.query 
+group by 1,2
+order by 1,4 desc;
