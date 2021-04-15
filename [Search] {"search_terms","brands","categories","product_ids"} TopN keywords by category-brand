@@ -32,4 +32,5 @@ select * from (
 where 1=1
     and searches_with_conversion > 1
     and users > 1
-    and top <= 10;
+    and top <= 10
+order by 1,2,top asc;
