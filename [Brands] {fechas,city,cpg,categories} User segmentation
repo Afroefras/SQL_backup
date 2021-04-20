@@ -1,0 +1,29 @@
+select
+    o.user_id,
+    o.with_subscription as membership,
+    to_char(o.actual_delivery_time at time zone sb.timezone, 'IYYY-IW') as year_week,
+    avg(oa.lat) as lat,
+    avg(oa.lng) as lng,
+    sum(o.qty_products_ordered) as total_products,
+    sum(o.total_receipt) as total_receipt,
+    count(op.order_id) as filtered_orders,
+    count(op.product_id) as filtered_products,
+    sum(op.cornershop_price) as filtered_receipt
+from orders_order o
+    join catalog_storebranch sb on sb.id = o.shopper_store_branch_id
+    join orders_orderaddress oa on oa.order_id = o.id
+    join orders_orderproduct op on op.order_id = o.id
+    join catalog_product p on p.id = op.product_id
+    join catalog_brand b on b.id = p.brand_id
+    join brandcenter_brandcentercpg_brands bcpg on bcpg.brand_id = b.id
+where 1=1
+    and p.category_id = {{categories_id}}
+    and bcpg.brandcentercpg_id = {{cpg_id}}
+    and sb.city_id = {{city_id}}
+    and o.currency = 'MXN'
+    and o.actual_delivery_time >= {{desde}} - interval '1 day' 
+    and o.actual_delivery_time < {{hasta}} + interval '2 day'
+    and o.actual_delivery_time at time zone sb.timezone between {{desde}} and {{hasta}} + interval '1 day'
+    and o.status = 'DELIVERED'
+    and o.order_kind = 'NORMAL'
+group by 1,2,3;
