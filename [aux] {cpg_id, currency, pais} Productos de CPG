@@ -4,7 +4,7 @@ select
     cpg.country_id,
     b.name as brand,
     p.id as product_id,
-    p.barcodes,
+    unnest(p.barcodes) as barcodes,
     p.name as product_name,
     p.package,
     p.currency
