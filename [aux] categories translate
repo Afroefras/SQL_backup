@@ -6,5 +6,5 @@ select
 from catalog_product p 
     join catalog_category c on c.id = p.category_id
     join catalog_categorylocalization cl on cl.category_id=c.id and cl.language='en'
-where cl.name in ('Baking mixes & gelatin','Sugar and sweetener','Tea & infusions')
+where cl.name ~* 'oral care|dish'
 group by 1,2,3;
