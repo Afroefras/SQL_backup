@@ -1,0 +1,18 @@
+select * from
+    (select
+        ntile(4) over (order by p.id) as n,
+        p.id as product_id,
+        unnest(p.barcodes) as barcodes,
+        c.id as category_id,
+        c.name as category_name,
+        b.id as brand_id,
+        b.name as brand_name,
+        cpg.id as cpg_id,
+        cpg.name as cpg_name
+    from catalog_product p
+        join catalog_category c on c.id = p.category_id
+        join catalog_brand b on b.id = p.brand_id
+        join brandcenter_brandcentercpg_brands bcpg on bcpg.brand_id = b.id
+        join brandcenter_brandcentercpg cpg on cpg.id = bcpg.brandcentercpg_id
+    ) a
+where n = 5;
