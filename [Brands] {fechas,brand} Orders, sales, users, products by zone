@@ -5,8 +5,9 @@ select
     unnest(p.barcodes) as barcodes,
     count(distinct o.id) as total_orders,
     sum(op.shopper_price) as total_sales,
-    count(o.user_id) as unique_users,
-    count(op.product_id) as total_products
+    count(distinct o.user_id) as unique_users,
+    count(op.quantity_found) filter(where op.quantity_found > 0) as items_found,
+    count(op.quantity) as items_ordered
 from orders_orderproduct op
     join catalog_product p on p.id = op.product_id
     join orders_order o on o.id = op.order_id
