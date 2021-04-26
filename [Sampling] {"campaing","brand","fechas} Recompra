@@ -81,4 +81,4 @@ from target_users tpu
         
 where pf.name is not null
 group by 1,2,3,4--,product_name_package
-order by 1,repurchase_users desc,items_p_order desc;
+order by repurchase_users desc,items_p_order desc;
