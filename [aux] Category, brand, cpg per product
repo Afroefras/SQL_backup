@@ -1,6 +1,6 @@
 select * from
-    (select
-        ntile(4) over (order by p.id) as n,
+    (select 
+        ntile(2) over (order by p.id) as n,
         p.id as product_id,
         unnest(p.barcodes) as barcodes,
         c.id as category_id,
@@ -10,9 +10,13 @@ select * from
         cpg.id as cpg_id,
         cpg.name as cpg_name
     from catalog_product p
-        join catalog_category c on c.id = p.category_id
-        join catalog_brand b on b.id = p.brand_id
-        join brandcenter_brandcentercpg_brands bcpg on bcpg.brand_id = b.id
-        join brandcenter_brandcentercpg cpg on cpg.id = bcpg.brandcentercpg_id
+        join catalog_productcategorization pc on pc.product_id = p.id
+        join catalog_category c on c.id = pc.category_id
+        left join catalog_brand b on b.id = p.brand_id
+        left join brandcenter_brandcentercpg_brands bcpg on bcpg.brand_id = b.id
+        left join brandcenter_brandcentercpg cpg on cpg.id = bcpg.brandcentercpg_id
+   where 1=1
+        and p.currency = 'MXN'
+        and cpg.country_id = 'MX'
     ) a
-where n = 5;
+where n=1;
