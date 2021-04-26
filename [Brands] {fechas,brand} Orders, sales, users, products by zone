@@ -6,8 +6,8 @@ select
     count(distinct o.id) as total_orders,
     sum(op.branch_price*op.quantity_found) as total_sales,
     count(distinct o.user_id) as unique_users,
-    count(op.quantity_found) filter(where op.quantity_found > 0) as items_found,
-    count(op.id) as items_ordered
+    sum(op.quantity_found) as qty_found,
+    sum(op.quantity) as qty_ordered
 from orders_orderproduct op
     join catalog_product p on p.id = op.product_id
     join orders_order o on o.id = op.order_id
