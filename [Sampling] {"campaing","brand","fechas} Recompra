@@ -1,0 +1,84 @@
+with product_filter as
+    (select
+        b.id as brand_id,
+        b.name as brand_name,
+        p.id as product_id,
+        p.name,
+        p.package,
+        c.id as category_id,
+        c.name as category_name
+    from catalog_product p
+        join catalog_productcategorization pc on pc.product_id = p.id
+        join catalog_category c on c.id = pc.category_id
+        join catalog_brand b on b.id=p.brand_id
+    where 1=1
+        [[and b.id = {{brand_id}}]]
+        and p.currency='MXN'
+        ),
+        
+    campaign_info as 
+    (select
+        (o.actual_delivery_time)::date as received_at,  
+        sd.user_id,
+        o.id as order_id,
+        sd.campaign_id,
+        sc.name as sampling_campaign,
+        ROW_NUMBER () OVER (PARTITION BY o.user_id ORDER BY order_id) as order_rank
+	from sampling_samplingdelivery sd
+	    join sampling_samplingcampaign sc on sc.id = sd.campaign_id
+	    join orders_order o on o.id = sd.order_id
+	    join catalog_storebranch sb on sb.id = o.shopper_store_branch_id
+	where 1=1
+	    [[and sd.campaign_id = {{campaign_id}}]]
+	    and o.status = 'DELIVERED'
+	    and sd.status = 'DELIVERED'
+	    and o.currency = 'MXN'
+        [[and o.actual_delivery_time >= {{desde}} - interval '1 day']] 
+        [[and o.actual_delivery_time < {{hasta}} + interval '2 day']]
+        [[and o.actual_delivery_time at time zone sb.timezone between {{desde}} and {{hasta}} + interval '1 day']]
+	    ),
+	    
+	target_users as 
+	(select
+        o.id as order_id, 
+		o.user_id,
+		op.product_id,
+		(o.actual_delivery_time)::date resale_at
+	from orders_orderproduct op
+	    join product_filter pf on pf.product_id = op.product_id
+		join orders_order o on o.id = op.order_id
+		join campaign_info ci on ci.user_id = o.user_id
+	where 1=1
+	    and ci.order_rank = 1
+	    and o.status = 'DELIVERED'
+		and o.order_kind = 'NORMAL'
+		and o.currency = 'MXN'
+		--se compró después de recibir el sampling
+		and (o.actual_delivery_time)::date > ci.received_at
+		--se compró a lo más N días después de recibir el sampling
+		and (o.actual_delivery_time)::date < ci.received_at + interval '15 days'
+		)
+
+select 
+    ci.campaign_id,
+    ci.sampling_campaign,
+    pf.category_name,
+    tot.sampling_users,
+    --concat(pf.name,' ',pf.package) as product_name_package,
+    count(distinct tpu.user_id) as repurchase_users,
+    count(tpu.product_id) as total_products,
+    count(tpu.product_id)*1.00 / count(distinct tpu.user_id) as items_p_order
+from target_users tpu
+    join product_filter pf on pf.product_id = tpu.product_id
+    join campaign_info ci on ci.user_id = tpu.user_id
+    join 
+        (select 
+            campaign_id, 
+            count(distinct user_id) as sampling_users 
+        from campaign_info
+        group by 1
+        ) tot on tot.campaign_id = ci.campaign_id
+        
+where pf.name is not null
+group by 1,2,3,4--,product_name_package
+order by 1,repurchase_users desc,items_p_order desc;
