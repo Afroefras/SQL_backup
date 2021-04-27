@@ -1,7 +1,8 @@
 select * from (
-    select *,
+    select
         rank() over (partition by category_name,brand_name
-                    order by searches_with_conversion desc) as top
+                    order by searches_with_conversion desc) as top,
+        *
     from (
         select
             cl.name as category_name,
@@ -15,13 +16,16 @@ select * from (
         from search_productsearchconversion psc
             join catalog_product p on p.id = psc.product_id 
             join catalog_brand b on b.id = p.brand_id
-            join catalog_category c on c.id = p.category_id
+            join catalog_productcategorization pc on pc.product_id = p.id
+            join catalog_category c on c.id = pc.category_id
             join catalog_categorylocalization cl on cl.category_id = c.id
+            join brandcenter_brandcentercpg_brands bcpg on bcpg.brand_id = b.id
         where 1=1
             [[and psc.search_term ~* {{search_terms}}]] --must be separated by "|"
             [[and p.id in ({{products_id}})]] --must be separated by comma ","
             [[and b.name ~* {{brand_names}}]]
-            [[and cl.name ~* {{categories_names}}]] 
+            [[and cl.name ~* {{categories_names}}]]
+            [[and bcpg.brandcentercpg_id = {{cpg_id}}]]
             and cl.language = 'en'
             and p.currency = 'MXN'
             and psc.created > now() - interval '6 months'
@@ -33,4 +37,4 @@ where 1=1
     and searches_with_conversion > 1
     and users > 1
     and top <= 10
-order by 1,2,top asc;
+order by 2,3,top asc;
