@@ -1,0 +1,73 @@
+select
+    b.*,
+    a.category_id,
+    a.category_name,
+    --a.product_name_package,
+    sum(a.sales) as sales,
+    count(distinct a.order_id) as orders,
+    count(distinct a.user_id) as users,
+    count(a.product_id) as products
+from
+    (select
+        uo.campaign_id,
+        o.id as order_id,
+        o.user_id,
+        p.id as product_id,
+        concat(p.name,' ',p.package) as product_name_package,
+        b.id as brand_id,
+        b.name as brand_name,
+        c.id as category_id,
+        c.name as category_name,
+        sum(op.branch_price*op.quantity_found) as sales
+    from orders_order o
+        join 
+            (select 
+                oc.campaign_id,
+                o.id as order_id,
+                o.actual_delivery_time as received_at,
+                o.user_id
+            from promotions_promotionalprojectcomponent ppc 
+                join promotions_ordercampaign oc on oc.campaign_id = ppc.component_id
+                join orders_order o on o.id = oc.order_id
+            where 1=1
+                and ppc.promotional_project_id = {{project_id}}
+                and o.status = 'DELIVERED'
+                [[and o.actual_delivery_time >= {{desde}} - interval '1 day']]
+                [[and o.actual_delivery_time < {{hasta}} + interval '2 day']]
+            ) uo on uo.user_id = o.user_id
+        
+        join orders_orderproduct op on op.order_id = o.id
+        join catalog_product p on p.id = op.product_id
+        join catalog_productcategorization pc on pc.product_id = p.id
+        join catalog_category c on c.id = pc.category_id
+        join catalog_brand b on b.id=p.brand_id
+    where 1=1
+        and (o.actual_delivery_time)::date > uo.received_at
+		and (o.actual_delivery_time)::date < uo.received_at + interval '30 days'
+        and o.currency = 'MXN'
+		and o.status = 'DELIVERED'
+		and o.order_kind = 'NORMAL'
+		[[and b.id = {{brand_id}}]]
+		[[and p.id = {{category_id}}]]
+        and p.currency='MXN'
+    group by 1,2,3,4,5,6,7,8,9
+    ) a
+    
+join
+    (select 
+        pp.id as project_id,
+        pp.name as project_name,
+        pp.initial_budget,
+        pp.available_budget,
+        gpc.campaign_ptr_id as campaign_id
+    from promotions_giftproductcampaign gpc
+        join promotions_promotionalprojectcomponent ppc on ppc.component_id = gpc.campaign_ptr_id 
+        join promotions_promotionalproject pp on pp.id = ppc.promotional_project_id 
+    where 1=1
+        and ppc.component_content_type_id = 447
+        and pp.id = {{project_id}}
+    ) b on b.campaign_id = a.campaign_id
+        
+where a.sales > 0
+group by 1,2,3,4,5,6,7--,a.product_name_package
+order by orders desc;
