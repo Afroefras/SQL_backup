@@ -2,7 +2,7 @@ select
     b.*,
     a.category_id,
     a.category_name,
-    --a.product_name_package,
+    a.product_name_package,
     sum(a.sales) as sales,
     count(distinct a.order_id) as orders,
     count(distinct a.user_id) as users,
@@ -32,8 +32,8 @@ from
             where 1=1
                 and ppc.promotional_project_id = {{project_id}}
                 and o.status = 'DELIVERED'
-                [[and o.actual_delivery_time >= {{desde}} - interval '1 day']]
-                [[and o.actual_delivery_time < {{hasta}} + interval '2 day']]
+                [[and o.actual_delivery_time >= {{sampling_desde}} - interval '1 day']]
+                [[and o.actual_delivery_time < {{sampling_hasta}} + interval '2 day']]
             ) uo on uo.user_id = o.user_id
         
         join orders_orderproduct op on op.order_id = o.id
@@ -44,6 +44,8 @@ from
     where 1=1
         and (o.actual_delivery_time)::date > uo.received_at
 		and (o.actual_delivery_time)::date < uo.received_at + interval '30 days'
+		[[and o.actual_delivery_time >= {{recompra_desde}} - interval '1 day']]
+        [[and o.actual_delivery_time < {{recompra_hasta}} + interval '2 day']]
         and o.currency = 'MXN'
 		and o.status = 'DELIVERED'
 		and o.order_kind = 'NORMAL'
@@ -69,5 +71,5 @@ join
     ) b on b.campaign_id = a.campaign_id
         
 where a.sales > 0
-group by 1,2,3,4,5,6,7--,a.product_name_package
+group by 1,2,3,4,5,6,7,a.product_name_package
 order by orders desc;
