@@ -33,9 +33,9 @@ with product_filter as
 	    and o.status = 'DELIVERED'
 	    and sd.status = 'DELIVERED'
 	    and o.currency = 'MXN'
-        [[and o.actual_delivery_time >= {{desde}} - interval '1 day']] 
-        [[and o.actual_delivery_time < {{hasta}} + interval '2 day']]
-        [[and o.actual_delivery_time at time zone sb.timezone between {{desde}} and {{hasta}} + interval '1 day']]
+        [[and o.actual_delivery_time >= {{sampling_desde}} - interval '1 day']] 
+        [[and o.actual_delivery_time < {{sampling_hasta}} + interval '2 day']]
+        [[and o.actual_delivery_time at time zone sb.timezone between {{sampling_desde}} and {{sampling_hasta}} + interval '1 day']]
 	    ),
 	    
 	target_users as 
@@ -56,7 +56,9 @@ with product_filter as
 		--se compró después de recibir el sampling
 		and (o.actual_delivery_time)::date > ci.received_at
 		--se compró a lo más N días después de recibir el sampling
-		and (o.actual_delivery_time)::date < ci.received_at + interval '15 days'
+		and (o.actual_delivery_time)::date < ci.received_at + interval '30 days'
+		[[and o.actual_delivery_time >= {{recompra_desde}} - interval '1 day']] 
+        	[[and o.actual_delivery_time < {{recompra_hasta}} + interval '2 day']]
 		)
 
 select 
