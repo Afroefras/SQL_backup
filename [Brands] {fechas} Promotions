@@ -1,0 +1,31 @@
+select 
+    to_char(o.actual_delivery_time at time zone gc.timezone,'IYYY-IW') as "Week",
+    c.valid_from at time zone gc.timezone as valid_from,
+    c.valid_until at time zone gc.timezone as valid_until,
+    case 
+        when c.cpg_id < 10000 then 'BRAND'
+        when c.cpg_id = 10000 then 'CORNERSHOP'
+        when c.cpg_id = 10001 then 'PARTNER'
+        when c.cpg_id > 10001 then 'OTHER'
+        else 'WITHOUT_TAG' end as sponsor,
+    c.cpg_id,
+    c.id as campaign_id,
+    c.name as campaign_name,
+    case when c.audience_id=1 then 'Pop'
+         when c.audience_id=2 then 'No pop'
+         else 'all' end as audience,
+    count(distinct o.id) as orders,
+    sum(oc.discount) as budget_used
+from promotions_ordercampaign oc 
+    join promotions_campaign c on c.id=oc.campaign_id
+    join orders_order o on o.id = oc.order_id
+    join catalog_storebranch as sb on sb.id = o.shopper_store_branch_id
+    join geo_city as gc on gc.id = sb.city_id
+where 1=1
+    and oc.discount>0
+    and gc.country_id='MX'
+    and o.actual_delivery_time >={{inicio}}-interval '2 days'
+    and o.actual_delivery_time <{{fin}}+interval '2 days'
+    and o.actual_delivery_time at time zone sb.timezone>={{inicio}}
+    and o.actual_delivery_time at time zone sb.timezone<{{fin}}+interval '1 days'
+group by 1,2,3,4,5,6,7,8;
