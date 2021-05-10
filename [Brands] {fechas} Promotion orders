@@ -1,0 +1,35 @@
+select
+    month,
+    count(order_id) as orders,
+    count(order_id) filter (where promotions >0) as promo_orders,
+    count(order_id) filter (where promotions=0) as non_promo_orders,
+    sum(budget_used) as brand_revenue
+from 
+    (select
+        to_char(o.actual_delivery_time at time zone sb.timezone, 'YYYY-MM') as month,
+        cs.name as store,
+        o.id as order_id,
+        coalesce(po.promotions,0)::int as promotions,
+        coalesce(o.total_receipt,o.shopper_total_receipt) as sales,
+        coalesce(po.budget_used,0) as budget_used
+    from orders_order as o
+        join catalog_storebranch as sb on sb.id = o.store_branch_id
+        join geo_city as gc on gc.id = sb.city_id
+        join catalog_store cs on sb.store_id = cs.id
+        left join
+            (select oc.order_id,
+                count(oc.id) as promotions,
+                sum(oc.discount) as budget_used
+            from promotions_ordercampaign oc
+                join promotions_campaign c on c.id = oc.campaign_id
+            where oc.discount>0 and c.cpg_id < 10000
+            group by 1
+            ) as po on po.order_id = o.id
+            
+    where 1=1
+        and o.status='DELIVERED' and o.order_kind='NORMAL'
+        and o.actual_delivery_time at time zone sb.timezone >= {{desde}}
+        and o.actual_delivery_time at time zone sb.timezone < {{hasta}}
+        and gc.country_id='MX'
+    ) t1
+group by 1;
