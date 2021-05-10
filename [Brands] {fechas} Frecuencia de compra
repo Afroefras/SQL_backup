@@ -26,5 +26,6 @@ from
         ) r1
     order by user_id,delivereddate_localtime
    )r2
+where days_between_orders > 0
 group by 1
 order by 1,2 desc;
