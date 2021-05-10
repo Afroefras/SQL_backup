@@ -1,30 +1,25 @@
 with multimapped as 
     (select
-        ssb.store_id,
+        sp.sku_source,
         sp.catalog_product_id
     from supply_product sp 
-        join supply_productbranch spb on sp.id = spb.product_id
-        join supply_storebranch ssb on ssb.id = spb.store_branch_id
-    where 1=1
-        and ssb.store_id in ({{store_id}})
-        and sp.catalog_product_id is not null
+    join supply_productbranch spb on sp.id = spb.product_id 
+    where 
+        sp.sku_source in ('br-nacional-csv','br-bigbompreco-csv','br-bompreco-csv','br-superbompreco-csv') and 
+        sp.catalog_product_id is not null
     group by 1,2
     having count(distinct sp.id) > 1
     )
 
 select 
-    ssb.store_id,
-    --ssb.catalog_store_branch_id as branch_id,
-    --spb.id as product_branch_id,
     sp.id as supply_id,
-    sp.catalog_product_id as product_id,
+    sp.sku_source,
+    sp.catalog_product_id,
     max(spb.last_visited) as max_last_visited
-from supply_product sp
+from supply_product sp 
     join supply_productbranch spb on sp.id = spb.product_id 
-    join supply_storebranch ssb on ssb.id = spb.store_branch_id
-    join multimapped m on m.store_id = ssb.store_id
-where 
-    exists (select 1 from multimapped m where sp.catalog_product_id = m.catalog_product_id) and 
-    ssb.store_id in ({{store_id}})
-group by 1,2,3--,4,5
-order by product_id,max_last_visited;
+where
+    exists (select 1 from multimapped m where sp.catalog_product_id = m.catalog_product_id and m.sku_source = sp.sku_source)
+    and sp.sku_source in ('br-nacional-csv','br-bigbompreco-csv','br-bompreco-csv','br-superbompreco-csv')
+group by 1,2,3
+order by 2,3;
