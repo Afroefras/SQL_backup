@@ -1,0 +1,30 @@
+select 
+    audience,
+    count(distinct order_id) as orders,
+    avg(days_between_orders)::numeric as avg_days_between_orders
+from 
+    (select 
+        r1.*,
+        (r1.delivereddate_localtime - lag(r1.delivereddate_localtime) over (partition by r1.user_id,r1.audience order by r1.delivereddate_localtime)) as days_between_orders
+    from 
+       (select 
+            row_number() over(partition by oos.user_id order by oos.delivereddate_localtime) as user_num_order, 
+            oos.user_id,
+            oos.order_id,
+            oos.delivereddate_localtime,
+            case when with_paid_subscription then 'pop' else 'no_pop' end as audience
+        from orders_ordersummary oos
+            join orders_orderattributes as ooa on oos.order_id = ooa.order_id
+            join catalog_store s on s.id = ooa.store_id
+        where 1=1
+            and oos.country = 'MX'
+            and oos.delivereddate_localtime >= {{desde}}
+            and oos.delivereddate_localtime <= {{hasta}}
+            and oos.status = 'DELIVERED'
+            and oos.order_kind = 'NORMAL'
+        order by oos.user_id,oos.delivereddate_localtime, oos.order_id
+        ) r1
+    order by user_id,delivereddate_localtime
+   )r2
+group by 1
+order by 1,2 desc;
