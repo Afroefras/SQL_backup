@@ -12,9 +12,9 @@ with product_filter as
         join catalog_category c on c.id = pc.category_id
         join catalog_brand b on b.id=p.brand_id
     where 1=1
-        [[and b.id = {{brand_id}}]]
+        [[and b.id in ({{brand_id}})]]
         and p.currency='MXN'
-        ),
+    ),
         
     campaign_info as 
     (select
@@ -29,21 +29,22 @@ with product_filter as
 	    join orders_order o on o.id = sd.order_id
 	    join catalog_storebranch sb on sb.id = o.shopper_store_branch_id
 	where 1=1
-	    [[and sd.campaign_id = {{campaign_id}}]]
+	    [[and sd.campaign_id in ({{campaign_id}})]]
 	    and o.status = 'DELIVERED'
 	    and sd.status = 'DELIVERED'
 	    and o.currency = 'MXN'
         [[and o.actual_delivery_time >= {{sampling_desde}} - interval '1 day']] 
         [[and o.actual_delivery_time < {{sampling_hasta}} + interval '2 day']]
         [[and o.actual_delivery_time at time zone sb.timezone between {{sampling_desde}} and {{sampling_hasta}} + interval '1 day']]
-	    ),
+	),
 	    
 	target_users as 
 	(select
+		(o.actual_delivery_time)::date resale_at,
         o.id as order_id, 
 		o.user_id,
 		op.product_id,
-		(o.actual_delivery_time)::date resale_at
+		coalesce(sum(op.quantity_found*op.branch_price), 0)::numeric as sales
 	from orders_orderproduct op
 	    join product_filter pf on pf.product_id = op.product_id
 		join orders_order o on o.id = op.order_id
@@ -58,8 +59,9 @@ with product_filter as
 		--se compró a lo más N días después de recibir el sampling
 		and (o.actual_delivery_time)::date < ci.received_at + interval '30 days'
 		[[and o.actual_delivery_time >= {{recompra_desde}} - interval '1 day']] 
-        	[[and o.actual_delivery_time < {{recompra_hasta}} + interval '2 day']]
-		)
+        [[and o.actual_delivery_time < {{recompra_hasta}} + interval '2 day']]
+    group by 1,2,3,4
+    )
 
 select 
     ci.campaign_id,
@@ -67,12 +69,12 @@ select
     pf.category_name,
     tot.sampling_users,
     --concat(pf.name,' ',pf.package) as product_name_package,
-    count(distinct tpu.user_id) as repurchase_users,
-    count(tpu.product_id) as total_products,
-    count(tpu.product_id)*1.00 / count(distinct tpu.user_id) as items_p_order
-from target_users tpu
-    join product_filter pf on pf.product_id = tpu.product_id
-    join campaign_info ci on ci.user_id = tpu.user_id
+    count(distinct tu.user_id) as repurchase_users,
+    count(tu.product_id) as total_products,
+    sum(tu.sales) as sales
+from target_users tu
+    join product_filter pf on pf.product_id = tu.product_id
+    join campaign_info ci on ci.user_id = tu.user_id
     join 
         (select 
             campaign_id, 
