@@ -1,0 +1,42 @@
+select 
+    --campaign_id,
+    lpad(hyho_items::text, 2, '0') as hyho_items,
+    lpad(health_items::text, 2, '0') as health_items,
+    count(distinct order_id) as orders,
+    count(distinct user_id) as unique_users
+from
+    (select 
+        --oc.campaign_id,
+        o.user_id,
+        o.id as order_id,
+        count(p.id) filter (where cpg.id = 11) as hyho_items,
+        count(p.id) filter (where cpg.id = 49) as health_items,
+        count(distinct op.id) as total_items
+    from promotions_promotionalprojectcomponent ppc 
+        join promotions_ordercampaign oc on oc.campaign_id = ppc.component_id
+        join orders_order o on o.id = oc.order_id
+        join orders_orderproduct op on op.order_id = o.id
+        join catalog_product p on p.id = op.product_id
+        join catalog_productcategorization pc on pc.product_id = p.id
+        join catalog_category c on c.id = pc.category_id
+        join catalog_brand b on b.id=p.brand_id
+        join brandcenter_brandcentercpg_brands bcpg on bcpg.brand_id = b.id
+        join brandcenter_brandcentercpg cpg on cpg.id = bcpg.brandcentercpg_id
+    where 1=1
+        and ppc.promotional_project_id = {{project_id}}
+        [[and o.actual_delivery_time >= {{sampling_desde}} - interval '1 day']]
+        [[and o.actual_delivery_time < {{sampling_hasta}} + interval '2 day']]
+    	[[and b.id = {{brand_id}}]]
+    	[[and p.id = {{category_id}}]]
+    	[[and cpg.id in ({{cpg_id}})]]
+        and p.currency ='MXN'
+    	and o.currency = 'MXN'
+    	and o.status = 'DELIVERED'
+    	and o.order_kind = 'NORMAL'
+    group by 1,2
+    ) a
+where 1=1
+    and total_items > 0
+    and hyho_items > 0
+    and health_items > 0
+group by 1,2;
