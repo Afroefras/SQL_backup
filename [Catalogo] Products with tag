@@ -1,0 +1,17 @@
+select 
+    tag.name as tag,
+    p.id as product_id,
+    p.name as product_name,
+    c.id as category_id,
+    c.name as category_name
+from catalog_product p
+    left join catalog_producttag pt on pt.product_id = p.id
+    left join catalog_tag tag on tag.id = pt.tag_id
+    join catalog_productcategorization pc on pc.product_id = p.id
+    join catalog_category c on c.id = pc.category_id
+where 1=1
+    and p.currency = 'MXN'
+    and c.id not in (451,1551)
+    and c.name ~* 'colch|espejo|cama|silla|mesa'
+    and p.name ~* 'colch|espejo|cama|silla|mesa'
+    and p.is_active
