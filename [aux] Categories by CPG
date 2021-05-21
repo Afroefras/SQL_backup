@@ -1,0 +1,21 @@
+select 
+    cpg.id as cpg_id,
+    cpg.name as cpg_name,
+    c.id as category_id,
+    cl.name as category_name,
+    c.name as category_name_es,
+    count(distinct p.id) as products
+from catalog_product p 
+    join catalog_brand b on b.id = p.brand_id 
+    join brandcenter_brandcentercpg_brands bcpg on bcpg.brand_id = b.id 
+    join brandcenter_brandcentercpg cpg on cpg.id = bcpg.brandcentercpg_id
+    join catalog_productcategorization pc on pc.product_id = p.id
+    join catalog_category c on c.id = pc.category_id
+    join catalog_categorylocalization cl on cl.category_id = c.id
+where 1=1
+    and p.currency = 'MXN'
+    and cpg.country_id = 'MX'
+    and cpg.name ilike '%hyho%'
+    and cl.language = 'en'
+group by 1,2,3,4,5
+order by 1,products desc;
