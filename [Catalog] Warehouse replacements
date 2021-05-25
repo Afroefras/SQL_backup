@@ -1,0 +1,15 @@
+select
+    order_id,
+    call_duration,
+    case when array['COMPLETED'] < calls_status then true else false end as completed_call
+from (
+    select
+        order_id,
+        array_agg(call_status) as calls_status,
+        sum(from_call_duration+to_call_duration) as call_duration
+    from calls_ordercalls
+    where 
+        call_type = 'picker::customer' and 
+        order_id in ()
+    group by 1
+) j
