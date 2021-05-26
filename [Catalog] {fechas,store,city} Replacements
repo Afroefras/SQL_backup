@@ -1,4 +1,7 @@
 select
+    to_char(o.promised_delivery_time at time zone sb.timezone, 'yyyy-mm-dd') as date,
+    gc.id as city_id,
+    gc.name as city_name,
     o.id as order_id, 
     orap.status, 
     case when sum(case when opa.name is not null then 1 else 0 end) > 0
@@ -12,7 +15,7 @@ from catalog_storebranch sb
     left join orders_orderreplacementalternative opa on opa.item_id = oop.id 
     left join orders_orderreplacementalternativeprocess orap on orap.order_id = o.id
 where 1=1
-    and sb.store_id ={{store_id}}
+    and sb.store_id = {{store_id}}
     [[and gc.id in ({{city_id}})]]
     and ceo.reference_content_type_id = 25
     and ceo.detail in ('CLIENT_ASKED_NO_STOCK', 'CLIENT_DIDNT_ANSWER_NO_STOCK') 
@@ -21,4 +24,5 @@ where 1=1
     and o.promised_delivery_time between {{desde}} - interval '1 day' and {{hasta}} + interval '2 day'
     and o.promised_delivery_time at time zone sb.timezone between {{desde}} and {{hasta}} + interval '1 day'
     and o.order_kind = 'NORMAL'
-group by 1,2;
+group by 1,2,3,4,5
+order by 2,1;
