@@ -1,15 +1,20 @@
 select
     s.name as store_name,
-    pb.id as product_branch_id,
+    gc.name as city,
+    sb.id as branch_id,
+    pb.id as productbranch_id,
     ps."SKU" as sku,
     unnest(p.barcodes) as barcodes,
     p.id as product_id,
-    p.name as product_name
+    p.name as product_name,
+    sum(pb.price) as price
 from catalog_productbranch pb
     join catalog_storebranch sb on sb.id = pb.branch_id
+    join geo_city gc on gc.id = sb.city_id
     join catalog_store s on s.id = sb.store_id
     join catalog_product p on p.id = pb.product_id
     join catalog_productstore ps on ps.store_id = s.id and ps.product_id = p.id
 where 1=1
     and p.id = 605030
     and s.id = 2648
+group by 1,2,3,4,5,6,7,8;
