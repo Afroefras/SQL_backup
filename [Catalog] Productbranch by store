@@ -1,0 +1,15 @@
+select
+    s.name as store_name,
+    pb.id as product_branch_id,
+    ps."SKU" as sku,
+    unnest(p.barcodes) as barcodes,
+    p.id as product_id,
+    p.name as product_name
+from catalog_productbranch pb
+    join catalog_storebranch sb on sb.id = pb.branch_id
+    join catalog_store s on s.id = sb.store_id
+    join catalog_product p on p.id = pb.product_id
+    join catalog_productstore ps on ps.store_id = s.id and ps.product_id = p.id
+where 1=1
+    and p.id = 605030
+    and s.id = 2648
