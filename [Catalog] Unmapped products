@@ -1,0 +1,18 @@
+select
+    pb.store_branch_id,
+    cm.blacklisted,
+    cm.source_category,
+    cm.aisle_id_id as aisle,
+    p.id as supply_product_id,
+    p.sku,
+    p.name as product_name,
+    p.img_url,
+    p.stock
+from supply_product p
+    join supply_productbranch pb on pb.product_id = p.id
+    left join supply_categorymap cm on cm.sku_source = p.sku_source
+where 1=1
+    and p.sku_source = 'chedrauicsv-mx'
+    and p.category_id = cm.source_category
+    and p.catalog_product_id is null
+    and pb.last_visited > now() - interval '7 days';
