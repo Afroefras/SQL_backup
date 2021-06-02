@@ -1,0 +1,25 @@
+select
+	sp.id as supply_id,
+	sp.name,
+	sp.package,
+	sp.brand,
+	sp.sku,
+	sp.catalog_product_id,
+	count(spb.id) as productbranches
+from supply_product sp
+join supply_productbranch spb on sp.id = spb.product_id 
+left join (
+	select distinct 
+		cm.source_category
+	from supply_categorymap cm
+	where 
+		cm.blacklisted and 
+		cm.sku_source = 'chedrauicsv-mx'
+) m on sp.category_id = m.source_category
+
+where 
+	sp.sku_source = 'chedrauicsv-mx' and 
+	m.source_category is null and 
+	spb.last_visited > '2021 05 26' and 
+	spb.stock > 0
+group by 1,2,3,4,5
