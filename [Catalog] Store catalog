@@ -1,8 +1,0 @@
-select distinct cp.id producto, csb.id sucursal 
-from catalog_productbranch cpb
-join catalog_storebranch csb on cpb.branch_id = csb.id
-join catalog_product cp on cpb.product_id = cp.id
-where csb.store_id = 98
-and cpb.active
-and csb.active
-and cp.is_active
