@@ -1,0 +1,20 @@
+select 
+    o.id as order_id,
+    p.id as product_id,
+    o.user_id,
+    c.name as category_name,
+    gc.name as city,
+    goz.name as zone,
+    sb.id as store_branch_id
+from orders_orderproduct op
+    join orders_order o on o.id = op.order_id
+    join catalog_storebranch sb on sb.id = o.store_branch_id
+    join geo_city gc on gc.id = sb.city_id
+    join geo_opzone goz on ST_Intersects(goz.multi_poly, sb.picking_point)
+    join catalog_product p on p.id = op.product_id
+    join catalog_category c on c.id = p.category_id
+where 1=1 
+    and o.id in (
+    
+    )
+    and not goz.deleted
