@@ -1,4 +1,5 @@
-select 
+select
+    'product_branch' as level,
     op.product_id as catalog_product_id,
     sb.id as branch,
     pb.id as productbranch_id,
@@ -21,16 +22,15 @@ where 1=1
     and op.product_id in (
         
     )
-
-group by 1,2,3
-order by orders desc
+group by 1,2,3,4
 
 union
 
-(select
-    'TOTAL' as catalog_product_id,
-    'TOTAL' as branch,
-    'TOTAL' as productbranch_id,
+select
+    'TOTAL' as level,
+    0 as catalog_product_id,
+    0 as branch,
+    0 as productbranch_id,
     sum(o.qty_products_ordered) as requested,
     sum(o.qty_products_found) as found,
     count(o.id) as orders,
@@ -45,5 +45,5 @@ where 1=1
     and o.status = 'DELIVERED'
     and o.order_kind = 'NORMAL'
     and sb.store_id = {{store_id}}
-group by 1,2,3)
-;
+group by 1,2,3,4
+order by orders desc;
