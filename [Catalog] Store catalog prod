@@ -1,13 +1,15 @@
 select
-    csb.store_id,
-    distinct cp.id as catalog_product_id,
-    csb.id as branch,
-    cpb.id as productbranch_id
-from catalog_productbranch cpb
-    join catalog_storebranch csb on cpb.branch_id = csb.id
-    join catalog_product cp on cpb.product_id = cp.id
+    sb.store_id,
+    p.id as catalog_product_id,
+    sb.id as branch,
+    pb.id as productbranch_id,
+    sum(pb.price) as price
+from catalog_productbranch pb
+    join catalog_storebranch sb on pb.branch_id = sb.id
+    join catalog_product p on pb.product_id = p.id
 where 1=1
-    and csb.store_id = {{store_id}}
-    and cpb.active
-    and csb.active
-    and cp.is_active
+    and sb.store_id = {{store_id}}
+    and pb.active
+    and sb.active
+    and p.is_active
+group by 1,2,3,4;
