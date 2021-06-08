@@ -1,6 +1,6 @@
 select 
-    op.product_id,
-    sb.id as branch_id,
+    op.product_id as catalog_product_id,
+    sb.id as branch,
     pb.id as productbranch_id,
     sum(op.quantity) as requested,
     sum(op.quantity_found) as found,
@@ -23,4 +23,27 @@ where 1=1
     )
 
 group by 1,2,3
-order by orders desc;
+order by orders desc
+
+union
+
+(select
+    'TOTAL' as catalog_product_id,
+    'TOTAL' as branch,
+    'TOTAL' as productbranch_id,
+    sum(o.qty_products_ordered) as requested,
+    sum(o.qty_products_found) as found,
+    count(o.id) as orders,
+    sum(o.total_receipt) as sales
+from orders_order o 
+    join catalog_storebranch sb on sb.id = o.store_branch_id
+where 1=1
+    and o.currency = 'MXN'
+    and o.actual_delivery_time >= {{desde}} - interval '1 day' 
+    and o.actual_delivery_time < {{hasta}} + interval '2 day'
+    and o.actual_delivery_time at time zone sb.timezone between {{desde}} and {{hasta}} + interval '1 day'
+    and o.status = 'DELIVERED'
+    and o.order_kind = 'NORMAL'
+    and sb.store_id = {{store_id}}
+group by 1,2,3)
+;
