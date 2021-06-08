@@ -12,6 +12,6 @@ from supply_product sp
 join supply_productbranch spb on sp.id = spb.product_id
 left join supply_productbarcode sb on sp.id = sb.product_id
 where 1=1
-    and sp.sku_source = 'mx-bodegasalianza-csv'
+    and sp.sku_source = 'mx-vinoteca-csv' --'mx-bodegasalianza-csv'
     and spb.last_visited > now()::date - interval '2 days' 
 group by 1,2,3,4,5,6;
