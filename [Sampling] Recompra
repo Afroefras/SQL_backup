@@ -45,8 +45,8 @@ with product_filter as
         o.id as order_id, 
 		o.user_id,
 		op.product_id,
-		sum(op.quantity_requested) as ordered
-		sum(op.quantity_found) as found
+		sum(op.quantity) as ordered,
+		sum(op.quantity_found) as found,
 		coalesce(sum(op.quantity_found*op.branch_price), 0)::numeric as sales
 	from orders_orderproduct op
 	    join product_filter pf on pf.product_id = op.product_id
