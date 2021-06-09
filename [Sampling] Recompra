@@ -12,6 +12,7 @@ with product_filter as
         join catalog_category c on c.id = pc.category_id
         join catalog_brand b on b.id=p.brand_id
     where 1=1
+        [[and p.id in ({{product_id}})]]
         [[and b.id in ({{brand_id}})]]
         and p.currency='MXN'
     ),
@@ -44,6 +45,8 @@ with product_filter as
         o.id as order_id, 
 		o.user_id,
 		op.product_id,
+		sum(op.quantity_requested) as ordered
+		sum(op.quantity_found) as found
 		coalesce(sum(op.quantity_found*op.branch_price), 0)::numeric as sales
 	from orders_orderproduct op
 	    join product_filter pf on pf.product_id = op.product_id
@@ -68,9 +71,11 @@ select
     ci.sampling_campaign,
     pf.category_name,
     tot.sampling_users,
-    --concat(pf.name,' ',pf.package) as product_name_package,
+    concat(pf.name,' ',pf.package) as product_name_package,
     count(distinct tu.user_id) as repurchase_users,
-    count(tu.product_id) as total_products,
+    sum(tu.ordered) as ordered,
+    sum(tu.found) as found,
+    sum(tu.found)*1.00 / count(distinct tu.user_id) as items_p_order,
     sum(tu.sales) as sales
 from target_users tu
     join product_filter pf on pf.product_id = tu.product_id
@@ -84,5 +89,5 @@ from target_users tu
         ) tot on tot.campaign_id = ci.campaign_id
         
 where pf.name is not null
-group by 1,2,3,4--,product_name_package
+group by 1,2,3,4,product_name_package
 order by repurchase_users desc,items_p_order desc;
