@@ -1,0 +1,38 @@
+select * from (
+    select
+        rank() over (partition by category_name
+                    order by searches_with_conversion desc) as top,
+        *
+    from (
+        select
+            cl.name as category_name,
+            psc.search_term,
+            count(psc.search_term) as searches_with_conversion,
+            count(distinct p.id) as unique_products,
+            count(psc.search_term)*1.00 / count(distinct p.id) as searches_p_product,
+            count(distinct psc.user_id) as users,
+            count(psc.search_term)*1.00 / count(distinct psc.user_id) as searches_p_user
+        from search_productsearchconversion psc
+            join catalog_product p on p.id = psc.product_id 
+            join catalog_brand b on b.id = p.brand_id
+            join catalog_productcategorization pc on pc.product_id = p.id
+            join catalog_category c on c.id = pc.category_id
+            join catalog_categorylocalization cl on cl.category_id = c.id
+            join brandcenter_brandcentercpg_brands bcpg on bcpg.brand_id = b.id
+        where 1=1
+            [[and psc.search_term ~* {{search_terms}}]] --must be separated by "|"
+            [[and p.id in ({{products_id}})]] --must be separated by comma ","
+            [[and c.id in ({{categories_id}})]]
+            [[and bcpg.brandcentercpg_id = {{cpg_id}}]]
+            and cl.language = 'en'
+            and p.currency = 'MXN'
+            and psc.created > now() - interval '6 months'
+        group by 1,2
+        order by searches_with_conversion desc
+        ) a
+    ) b
+where 1=1
+    and searches_with_conversion > 1
+    and users > 1
+    and top <= 20
+order by 2,top asc;
