@@ -1,0 +1,11 @@
+select 
+    sku,
+    id as supply_id,
+    catalog_product_id,
+    unit
+from supply_product 
+where 1=1
+    and sku_source = 'hebcsv-mx' 
+    and sku in (
+        
+    )
