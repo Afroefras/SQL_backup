@@ -1,0 +1,7 @@
+select 
+    (m.created_at at time zone 'CST')::date as membership_date_activation,
+    p.name as loyalty_plan_name,
+    m.identifier as membership_identifier
+from loyalty_planmembership m 
+    join loyalty_plan p on p.uuid=m.plan_uuid
+where p.name='Club Petco'
