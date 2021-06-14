@@ -14,7 +14,7 @@ select
     , o_w_markup.store_branch_id
     , array_to_string(
         array_agg(distinct o_w_markup.order_id)
-        , ','
+        , ', '
     ) orders_detail
     --, coalesce(aux.in_promotion, 'No promo')
     --, aux.campaignid campaignid
@@ -44,6 +44,7 @@ join (
     left join orders_chargeableitem och_m on o.id = och_m.order_id and och_m.type = 'MARKUP'
     left join 
         (
+        
             SELECT coalesce(sum(discount), 0) AS discount, order_id
             FROM promotions_ordercampaign oc
             JOIN orders_order o ON o.id=order_id
@@ -59,8 +60,8 @@ join (
                     is_store_promotion AND
                     oc.campaign_id=pc.id
                 ) 
-                     and o.actual_delivery_time between {{start_date}} - interval '1 day' and {{end_date}} + interval '1 day' -- Filter date (2). Must be un dae before and after filter (1)
-                    and csb.store_id in (613) -- * FILTER store_id
+                    and o.actual_delivery_time between {{start_date}} - interval '1 day' and {{end_date}} + interval '1 day' -- Filter date (2). Must be un dae before and after filter (1)
+                    and csb.store_id in ({{store_id}}) -- * FILTER store_id
             GROUP BY order_id
         ) d on o.id = d.order_id
     where o.actual_delivery_time between {{start_date}} - interval '1 day' and {{end_date}} + interval '1 day' -- Filter date (2). Must be un dae before and after filter (1)
@@ -69,7 +70,7 @@ join (
         and o.order_kind = 'NORMAL' 
         and cs.country = {{country}}
         and cpb.currency = {{currency}}
-        and cs.id in (613)    
+        and cs.id in ({{store_id}})   
         and (case when o.total_receipt is not null then 1 else 0 end) = 1
       --  and ((o.total - o.delivery_charged - coalesce(och_m.price_charged, 0) + coalesce(d.discount, 0))/(1 + coalesce(csb.markup_pctg, 0)/100)) - 
         --(coalesce(o.total_receipt, o.shopper_total_receipt)) < -3
@@ -95,16 +96,17 @@ left join (
     and pc.country = {{country}}
     and pc.is_store_promotion
     and pc.valid_until >= now()) aux on aux.product_id = o_w_markup.product_id and aux.branch_id = o_w_markup.store_branch_id
-where o.actual_delivery_time between {{start_date}} - interval '1 day' and {{end_date}} + interval '1 day' -- Filter date (2). Must be un dae before and after filter (1)
+where 1=1
+    and o.actual_delivery_time between {{start_date}} - interval '1 day' and {{end_date}} + interval '1 day' -- Filter date (2). Must be un dae before and after filter (1)
     and (o.actual_delivery_time at time zone csb.timezone)::date between {{start_date}} and {{end_date}}
     and o.status = 'DELIVERED' 
     and o.order_kind = 'NORMAL' 
     and cs.country = {{country}}
-    and cs.id = {{store_id}}
+    and cs.id in ({{store_id}})
     and cpb.branch_price <> op.shopper_price
     and coalesce(aux.in_promotion, 'No promo') = 'No promo'
     --and extract(hour from now() at time zone o_w_markup.timezone) in (18)
 group by 1,2,3,5,6,7,8,10,11,12,13,15
 having (sum(op.quantity_found*(op.cornershop_price-op.shopper_price))) > 5
         --and count(o_w_markup.order_id) >= 2
-order by 4 desc
+order by orders_w_markups desc
