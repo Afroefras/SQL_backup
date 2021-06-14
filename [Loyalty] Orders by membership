@@ -1,0 +1,28 @@
+select 
+    (m.created_at at time zone sb.timezone)::date as membership_date_activation,
+    (o.actual_delivery_time at time zone sb.timezone)::date as delivery_date,
+    p.name as loyalty_plan_name,
+    m.identifier as membership_identifier,
+    o.external_id,
+    o.user_id,
+    s.id as store_id,
+    s.name as store,
+    sb.id as branch_id,
+    sb.name as branch,
+    coalesce(o.total_receipt,o.shopper_total_receipt) as ticket,
+    qty_products_found,
+    qty_products_ordered,
+    qty_products_replaced
+from loyalty_plan p 
+    join loyalty_planmembership m on m.plan_uuid = p.uuid
+    join orders_ordergrouployaltyplanmembership oglpm on oglpm.membership_uuid = m.uuid
+    join orders_order o on o.order_group_uuid = oglpm.order_group_uuid
+    join catalog_storebranch sb on sb.id = o.shopper_store_branch_id
+    join catalog_store s on s.id = sb.store_id 
+where 1=1
+    and sb.store_id in (1424,9,45,1423)
+    and p.name='Monedero Naranja'
+    and o.order_kind='NORMAL' and o.status='DELIVERED' 
+    and o.actual_delivery_time at time zone sb.timezone >='2021-05-01'
+    and o.actual_delivery_time at time zone sb.timezone <'2021-06-01'
+order by delivery_date,membership_date_activation,user_id
