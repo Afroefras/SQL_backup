@@ -1,0 +1,30 @@
+with aux as(
+    select
+        gc.name as city,
+        goz.name as zone,
+        sd.user_id,
+        sc.product_id as product_id,
+        cp.name as product_name,
+        count(distinct sd.order_id) as total_samplings
+    from orders_order o
+        join sampling_samplingdelivery sd on sd.order_id = o.id
+        join sampling_samplingcampaign sc on sc.id = sd.campaign_id
+        join catalog_product cp on cp.id = sc.product_id
+        join catalog_storebranch sb on sb.id = o.store_branch_id
+        join geo_city gc on gc.id = sb.city_id
+        join geo_opzone goz on ST_Intersects(goz.multi_poly, sb.picking_point) and not goz.deleted
+    where 1=1
+        and sc.id in ({{sampling_campaign}})
+        and sd.quantity_delivered > 0
+        and sd.status = 'DELIVERED'
+        and o.status = 'DELIVERED'
+        and o.order_kind = 'NORMAL'
+        [[and o.actual_delivery_time >= {{desde}} - interval '1 day']]
+        [[and o.actual_delivery_time < {{hasta}} + interval '2 day']]
+    group by 1,2,3,4,5)
+
+select 
+    city,zone,product_id, product_name, 
+    concat('_',LPAD(total_samplings::text, 2, '0')) as total_samplings,
+    count(distinct user_id) as users 
+from aux group by 1,2,3,4,5;
