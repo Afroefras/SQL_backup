@@ -1,0 +1,29 @@
+--EXTRACT FEASIBLE PRODUCTS WITH BARCODES IN CATALOG 
+
+select  product_id,
+        string_agg(barcode, ',')::TEXT as catalog_barcodes
+from (
+    select cp.id as product_id,
+        unnest(string_to_array(replace(replace(cp.barcodes::text, '{'::text, ''::text), '}'::text, ''::text), ',')) as barcode
+    from catalog_product cp 
+    join catalog_productcategorization cpc on cp.id = cpc.product_id
+    join catalog_category cc on cpc.category_id = cc.id 
+    where cp.id not in (select product_id from catalog_producttag where tag_id=5) and cp.buy_unit='UN' and (cc.parent_id not in (538,17) or cc.id not in (134,135,136,137,546,1008,1082,538,17)) and (variable_weight='false' or variable_weight is null) and cp.barcodes is not null
+        and cp.id in (PRODUCT IDS)
+    ) h
+where ((length(barcode) = 12 and left(barcode,1) <> '2' and left(barcode,1) <> '4' and left(barcode,1) <> '5') or (length(barcode) = 13 and (left(barcode,1) <> '2' and left(barcode,2) <> '02' and left(barcode,2) <> '04' and left(barcode,2) <> '05')) or length(barcode) not in (12,13)) 
+    and barcode not ilike '%""%' and barcode not ilike '{}'
+group by 1 
+
+UNION ALL 
+
+--EXTRACT FEASIBLE PRODUCTS WITHOUT BARCODES IN CATALOG 
+
+select cp.id as product_id,
+case when cp.barcodes is null then '0'
+else '-' end as catalog_barcodes
+from catalog_product cp 
+join catalog_productcategorization cpc on cp.id = cpc.product_id
+join catalog_category cc on cpc.category_id = cc.id 
+where cp.id not in (select product_id from catalog_producttag where tag_id=5) and cp.buy_unit='UN' and (cc.parent_id not in (538,17) or cc.id not in (134,135,136,137,546,1008,1082,538,17)) and (variable_weight='false' or variable_weight is null) and cp.barcodes is null
+and cp.id in (PRODUCT IDS)
