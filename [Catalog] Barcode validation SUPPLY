@@ -1,0 +1,17 @@
+select *
+from (select 
+        sp.catalog_product_id,
+        REPLACE(REPLACE(LTRIM(REPLACE(barcode, '0', ' ')),' ', '0'),'"','') as barcode,
+        string_agg(sp.sku_source, ' , ') as sku_source
+from supply_storeinfo ssi 
+join supply_product sp on ssi.sku_source=sp.sku_source
+join supply_productbarcode spb on sp.id = spb.product_id
+where 
+    spb.barcode is not null 
+    and sp.catalog_product_id in (CATALOG_PRODUCT_ID) 
+    and ssi.is_active 
+    and left(right(spb.barcode,6),5)<>'00000' 
+    and spb.barcode not ilike '%.%' and spb.barcode not ilike '%"%' and ((package is null or package not ilike '%x%' or package not ilike '%pack%') and sp.name not ilike '%pack%')
+    and ssi.sku_source not in ('us-costco','','costcocsv-mx','ca-costco-csv','samscsv-br','pe-makro-csv','co-pricesmart-csv')
+group by 1,2) b
+where ((length(barcode) = 12 and left(barcode,1) <> '2' and left(barcode,1) <> '4' and left(barcode,1) <> '5') or (length(barcode) = 13 and (left(barcode,1) <> '2' )) or (length(barcode) not in (12,13) and length(barcode)<=14 and length(barcode)>6 ))
