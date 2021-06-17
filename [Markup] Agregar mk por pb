@@ -1,0 +1,6 @@
+select 
+    pb.id as product_branch_id,
+    0.23 as markup_rate
+from catalog_productbranch pb
+    join catalog_storebranch sb on sb.id = pb.branch_id
+where sb.store_id = 10710 and pb.active
