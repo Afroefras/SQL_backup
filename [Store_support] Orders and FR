@@ -14,8 +14,9 @@ from orders_ordersummary os
 	join catalog_store s on s.id = oa.store_id
 	join catalog_storebranch sb on oa.branch_id = sb.id
 where 1=1
-	and s.country in ({{country}})
-	and os.delivereddate_localtime between {{desde}} and {{hasta}}
+	and s.country in ('MX','CL','CO','PE','CR')
+	and os.delivereddate_localtime >= date_trunc('week',current_date) - interval '1 week'
+    and os.delivereddate_localtime < date_trunc('week',current_date)
 	and os.status = 'DELIVERED' 
 	and os.order_kind = 'NORMAL'
 	and s.is_selfservice
