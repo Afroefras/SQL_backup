@@ -1,0 +1,22 @@
+select
+    to_char(os.delivereddate_localtime, 'YYYY') as year,
+	to_char(os.delivereddate_localtime, 'IW') as week,
+	os.country,
+	s.id as store_id,
+	s.name as store_name,
+	sb.id as branch_id,
+	sb.name as branch,
+	count(os.order_id) orders,
+	sum(os.products_found) as products_found,
+	sum(os.products_ordered) as products_ordered
+from orders_ordersummary os
+	join orders_orderattributes oa on os.order_id = oa.order_id
+	join catalog_store s on s.id = oa.store_id
+	join catalog_storebranch sb on oa.branch_id = sb.id
+where 1=1
+	and s.country in ({{country}})
+	and os.delivereddate_localtime between {{desde}} and {{hasta}}
+	and os.status = 'DELIVERED' 
+	and os.order_kind = 'NORMAL'
+	and s.is_selfservice
+group by 1,2,3,4,5,6,7;
