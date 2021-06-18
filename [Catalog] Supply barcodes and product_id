@@ -1,0 +1,5 @@
+select sku,catalog_product_id from supply_product 
+where sku_source = 'mx-officedepot-csv'
+and (sku in ()
+    or sku in ()
+    or sku in ())
