@@ -7,6 +7,7 @@ select
 	sb.id as branch_id,
 	sb.name as branch,
 	count(os.order_id) orders,
+	sum(os.products_found)*1.00 / sum(os.products_ordered) as branch_fr,
 	sum(os.products_found) as products_found,
 	sum(os.products_ordered) as products_ordered
 from orders_ordersummary os
