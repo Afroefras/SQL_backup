@@ -1,0 +1,56 @@
+with sampling_zone as(
+    select
+        gc.name as city,
+        goz.id as zone_id,
+        goz.name as zone,
+        o.user_id,
+        count(distinct ppc.id) as sampling_projects,
+        count(distinct oc.id) as sampling_campaigns,
+        count(distinct o.id) as total_samplings
+    from orders_order o
+        join promotions_ordercampaign oc on oc.order_id = o.id
+        join promotions_promotionalprojectcomponent ppc on ppc.component_id = oc.campaign_id
+        join catalog_storebranch sb on sb.id = o.store_branch_id
+        join geo_city gc on gc.id = sb.city_id
+        join geo_opzone goz on ST_Intersects(goz.multi_poly, sb.picking_point) and not goz.deleted
+    where 1=1
+        [[and ppc.promotional_project_id in ({{project_id}})]]
+        [[and o.actual_delivery_time >= {{desde}} - interval '2 day']]
+        [[and o.actual_delivery_time < {{hasta}} + interval '2 day']]
+        [[and actual_delivery_time at time zone sb.timezone >= {{desde}}]]
+        [[and actual_delivery_time at time zone sb.timezone < {{hasta}} + interval '1 day']]
+        and gc.country_id = 'MX'
+        and o.currency = 'MXN'
+        and o.status = 'DELIVERED'
+    group by 1,2,3,4
+    )
+
+select 
+    sz.city,
+    sz.zone,
+    concat('_',LPAD(sz.total_samplings::text, 2, '0')) as total_samplings,
+    count(distinct sz.user_id) as sampling_users,
+    sum(sz.sampling_campaigns) as sampling_campaigns,
+    avg(tot.total_users) as total_users,
+    count(distinct sz.user_id)*1.00 / avg(tot.total_users) as sampled_from_tot
+from sampling_zone sz 
+    join 
+        (select
+            goz.id as zone_id,
+            count(distinct o.user_id) as total_users
+        from orders_order o
+            join catalog_storebranch sb on sb.id = o.store_branch_id
+            join geo_city gc on gc.id = sb.city_id
+            join geo_opzone goz on ST_Intersects(goz.multi_poly, sb.picking_point) and not goz.deleted
+        where 1=1
+            [[and o.actual_delivery_time >= {{desde}} - interval '1 day']]
+            [[and o.actual_delivery_time < {{hasta}} + interval '2 day']]
+            and gc.country_id = 'MX'
+            and o.currency = 'MXN'
+            and o.status = 'DELIVERED'
+            and o.order_kind = 'NORMAL'
+        group by 1
+        ) tot on tot.zone_id = sz.zone_id
+        
+group by 1,2,3
+order by sampled_from_tot desc;
