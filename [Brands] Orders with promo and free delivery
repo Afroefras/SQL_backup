@@ -1,0 +1,41 @@
+select
+    s.name as store_name,
+    gc.name as city_name,
+    count(distinct o.id) as orders,
+    count(distinct promo.promo_order_id) as promo_orders,
+    coalesce(sum(free_delivery),0) as free_delivery_orders
+from orders_order o
+    join catalog_storebranch sb on sb.id = o.store_branch_id
+    join catalog_store s on s.id = sb.store_id
+    join geo_city gc on gc.id = sb.city_id
+    left join (
+        select
+            o.id as promo_order_id,
+            count(distinct o.id) filter(where o.delivery_charged = 0) as free_delivery
+        from promotions_ordercampaign oc
+            join orders_order o on o.id = oc.order_id
+            join catalog_storebranch sb on sb.id = o.store_branch_id
+            join catalog_store s on s.id = sb.store_id
+            join geo_city gc on gc.id = sb.city_id
+        where 1=1
+            [[and s.id in ({{store_id}})]]
+            [[and o.actual_delivery_time >= {{desde}} - interval '2 day']]
+            [[and o.actual_delivery_time < {{hasta}} + interval '2 day']]
+            [[and actual_delivery_time at time zone sb.timezone >= {{desde}}]]
+            [[and actual_delivery_time at time zone sb.timezone < {{hasta}} + interval '1 day']]
+            and o.currency = 'MXN'
+            and o.status = 'DELIVERED'
+            and gc.country_id = 'MX'
+        group by 1
+        ) promo on promo.promo_order_id = o.id
+        
+where 1=1
+    [[and s.id in ({{store_id}})]]
+    [[and o.actual_delivery_time >= {{desde}} - interval '2 day']]
+    [[and o.actual_delivery_time < {{hasta}} + interval '2 day']]
+    [[and actual_delivery_time at time zone sb.timezone >= {{desde}}]]
+    [[and actual_delivery_time at time zone sb.timezone < {{hasta}} + interval '1 day']]
+    and o.currency = 'MXN'
+    and o.status = 'DELIVERED'
+    and gc.country_id = 'MX'
+group by 1,2;
