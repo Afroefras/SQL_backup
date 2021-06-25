@@ -1,20 +1,18 @@
-select * from 
-    (select 
-        unnest(p.barcodes) as barcodes,
-        cpg.id as cpg_id,
-        cpg.name as cpg_name,
-        b.id as brand_id,
-        b.name as brand_name,
-        p.id as product_id,
-        p.name,
-        p.is_active
-    from catalog_product p
-        join catalog_brand b on b.id=p.brand_id
-        join brandcenter_brandcentercpg_brands bcpg on bcpg.brand_id = b.id 
-        join brandcenter_brandcentercpg cpg on cpg.id = bcpg.brandcentercpg_id
-    where 1=1
-        [[and b.id in ({{brand_id}})]]
-        [[and cpg.id in ({{cpg_id}})]]
-        and p.currency = 'MXN'
-    ) as a
-where barcodes in ('7501032970079')
+select 
+    unnest(p.barcodes) as barcodes,
+    cpg.id as cpg_id,
+    cpg.name as cpg_name,
+    b.id as brand_id,
+    b.name as brand_name,
+    p.id as product_id,
+    p.name,
+    p.is_active
+from catalog_product p
+    left join catalog_brand b on b.id=p.brand_id
+    left join brandcenter_brandcentercpg_brands bcpg on bcpg.brand_id = b.id 
+    left join brandcenter_brandcentercpg cpg on cpg.id = bcpg.brandcentercpg_id
+where 1=1
+    and p.barcodes in ('{7501032970079}')
+    [[and b.id in ({{brand_id}})]]
+    [[and cpg.id in ({{cpg_id}})]]
+       and p.currency = 'MXN'
