@@ -1,4 +1,6 @@
+-- Convenience stores in MX: 2648,2712,2902
 select
+    to_char(actual_delivery_time at time zone sb.timezone, 'YYYY-MM') as month,
     s.name as store_name,
     gc.name as city_name,
     count(distinct o.id) as orders,
@@ -38,4 +40,5 @@ where 1=1
     and o.currency = 'MXN'
     and o.status = 'DELIVERED'
     and gc.country_id = 'MX'
-group by 1,2;
+group by 1,2,3
+order by month, orders desc;
