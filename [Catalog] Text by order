@@ -1,0 +1,76 @@
+select 
+    month,city,zone_id,zone,user_id,order_kind,order_status,order_id,
+    custom_product,
+    custom_request,
+    string_agg(chat_messages,'\n ') as chat_messages
+from (
+    select 
+        to_char(o.actual_delivery_time, 'yyyy-mm') as month,
+        gc.name as city,
+        goz.id as zone_id,
+        goz.name as zone,
+        o.user_id,
+        o.order_kind,
+        o.status as order_status,
+        o.id as order_id,
+        cm.user_role,
+        concat(cm.user_role,': ',string_agg(cm.text,'_ ')) as chat_messages
+    from orders_orderchatmessage cm
+        join orders_order o on o.id = cm.order_id
+        join catalog_storebranch sb on sb.id = o.store_branch_id
+        join geo_city gc on gc.id = sb.city_id
+        join geo_opzone goz on ST_Intersects(goz.multi_poly, sb.picking_point) and not goz.deleted
+    where 1=1
+        and cm.user_role <> 'SOM'
+        and o.actual_delivery_time >= {{desde}} - interval '2 day'
+        and o.actual_delivery_time < {{hasta}} + interval '2 day'
+        and actual_delivery_time at time zone sb.timezone >= {{desde}}
+        and actual_delivery_time at time zone sb.timezone < {{hasta}} + interval '1 day'
+        [[and gc.id in ({{city_id}})]]
+        [[and sb.store_id in ({{store_id}})]]
+        and cm.text <> ''
+        and o.currency = 'MXN'
+    group by 1,2,3,4,5,6,7,8,9
+    ) chat
+    
+    full join (
+        select 
+            o.id,
+            string_agg(op.custom_request,'_ ') as custom_request
+        from orders_orderproduct op
+            join orders_order o on o.id = op.order_id
+            join catalog_storebranch sb on sb.id = o.store_branch_id
+            join geo_city gc on gc.id = sb.city_id
+        where 1=1
+            and o.actual_delivery_time >= {{desde}} - interval '2 day'
+            and o.actual_delivery_time < {{hasta}} + interval '2 day'
+            and actual_delivery_time at time zone sb.timezone >= {{desde}}
+            and actual_delivery_time at time zone sb.timezone < {{hasta}} + interval '1 day'
+            [[and gc.id in ({{city_id}})]]
+            [[and sb.store_id in ({{store_id}})]]
+            and op.custom_request <> ''
+            and o.currency = 'MXN'
+        group by 1
+        ) custom_p on custom_p.id = chat.order_id
+    
+    full join(
+        select 
+            o.id,
+            string_agg(cp.description,'_ ') as custom_product
+        from orders_ordercustomproduct cp
+            join orders_order o on o.id = cp.order_id
+            join catalog_storebranch sb on sb.id = o.store_branch_id
+            join geo_city gc on gc.id = sb.city_id
+        where 1=1
+            and o.actual_delivery_time >= {{desde}} - interval '2 day'
+            and o.actual_delivery_time < {{hasta}} + interval '2 day'
+            and actual_delivery_time at time zone sb.timezone >= {{desde}}
+            and actual_delivery_time at time zone sb.timezone < {{hasta}} + interval '1 day'
+            [[and gc.id in ({{city_id}})]]
+            [[and sb.store_id in ({{store_id}})]]
+            and cp.description <> ''
+            and o.currency = 'MXN'
+        group by 1
+        ) custom_r on custom_r.id = chat.order_id
+        
+group by 1,2,3,4,5,6,7,8,9,10;
