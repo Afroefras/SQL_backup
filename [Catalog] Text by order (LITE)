@@ -1,65 +1,21 @@
 select 
-    coalesce(coalesce(custom_p.id,custom_r.id),chat.order_id) as order_id,
-    custom_product,
-    custom_request,
-    string_agg(chat_messages,'\n ') as chat_messages
-from (
-    select 
-        o.id as order_id,
-        cm.user_role,
-        concat(cm.user_role,': ',string_agg(cm.text,'_ ')) as chat_messages
-    from orders_orderchatmessage cm
-        join orders_order o on o.id = cm.order_id
-        join catalog_storebranch sb on sb.id = o.store_branch_id
-    where 1=1
-        and cm.user_role <> 'SOM'
-        [[and sb.city_id in ({{city_id}})]]
-        [[and sb.store_id in ({{store_id}})]]
-        and cm.text <> ''
-        and o.currency = 'MXN'
-        and o.actual_delivery_time >= {{desde}} - interval '2 day'
-        and o.actual_delivery_time < {{hasta}} + interval '2 day'
-        and o.actual_delivery_time at time zone sb.timezone >= {{desde}}
-        and o.actual_delivery_time at time zone sb.timezone < {{hasta}} + interval '1 day'
-    group by 1,2
-    ) chat
-    
-    full join (
-        select 
-            o.id,
-            string_agg(op.custom_request,'_ ') as custom_request
-        from orders_orderproduct op
-            join orders_order o on o.id = op.order_id
-            join catalog_storebranch sb on sb.id = o.store_branch_id
-        where 1=1
-            [[and sb.city_id in ({{city_id}})]]
-            [[and sb.store_id in ({{store_id}})]]
-            and op.custom_request <> ''
-            and o.currency = 'MXN'
-            and o.actual_delivery_time >= {{desde}} - interval '2 day'
-            and o.actual_delivery_time < {{hasta}} + interval '2 day'
-            and actual_delivery_time at time zone sb.timezone >= {{desde}}
-            and actual_delivery_time at time zone sb.timezone < {{hasta}} + interval '1 day'
-        group by 1
-        ) custom_p on custom_p.id = chat.order_id
-    
-    full join (
-        select 
-            o.id,
-            string_agg(cp.description,'_ ') as custom_product
-        from orders_ordercustomproduct cp
-            join orders_order o on o.id = cp.order_id
-            join catalog_storebranch sb on sb.id = o.store_branch_id
-        where 1=1
-            [[and sb.city_id in ({{city_id}})]]
-            [[and sb.store_id in ({{store_id}})]]
-            and cp.description <> ''
-            and o.currency = 'MXN'
-            and o.actual_delivery_time >= {{desde}} - interval '2 day'
-            and o.actual_delivery_time < {{hasta}} + interval '2 day'
-            and actual_delivery_time at time zone sb.timezone >= {{desde}}
-            and actual_delivery_time at time zone sb.timezone < {{hasta}} + interval '1 day'
-        group by 1
-        ) custom_r on custom_r.id = chat.order_id
-        
-group by 1,2,3;
+    o.id as order_id,
+    concat(string_agg(concat(op.custom_request,' :: ',p.name),'_ '),'_ ',string_agg(cp.description,'_ ')) as text
+from orders_orderproduct op
+    join orders_order o on o.id = op.order_id
+    join catalog_product p on p.id = op.product_id
+    join catalog_productcategorization pc on pc.product_id = p.id
+    join catalog_category c on c.id = pc.category_id
+    join catalog_storebranch sb on sb.id = o.store_branch_id
+    full join orders_ordercustomproduct cp on cp.order_id = o.id
+where 1=1
+    [[and sb.city_id in ({{city_id}})]]
+    [[and sb.store_id in ({{store_id}})]]
+    [[and c.id in ({{category_id}})]]
+    and (op.custom_request <> '' or cp.description <> '')
+    and o.currency = 'MXN'
+    and o.actual_delivery_time >= {{desde}} - interval '2 day'
+    and o.actual_delivery_time < {{hasta}} + interval '2 day'
+    and o.actual_delivery_time at time zone sb.timezone >= {{desde}}
+    and o.actual_delivery_time at time zone sb.timezone < {{hasta}} + interval '1 day'
+group by 1
