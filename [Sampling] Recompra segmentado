@@ -1,85 +1,91 @@
-select
-    b.*,
-    a.category_id,
-    a.category_name,
-    product_name_package,
-	sum(a.ordered) as ordered,
-	sum(a.found) as found,
-    sum(a.sales) as sales,
-    count(distinct a.order_id) as orders,
-    count(distinct a.user_id) as users,
-    count(a.product_id) as products
-from
+with product_filter as
     (select
-        uo.campaign_id,
-        o.id as order_id,
-        o.user_id,
-        p.id as product_id,
-        concat(p.name,' ',p.package) as product_name_package,
         b.id as brand_id,
         b.name as brand_name,
+        p.id as product_id,
+        p.name,
+        p.package,
         c.id as category_id,
-        c.name as category_name,
-		sum(op.quantity) as ordered,
-		sum(op.quantity_found) as found,
-        coalesce(sum(op.quantity_found*op.branch_price), 0)::numeric as sales
-    from orders_order o
-        join 
-            (select 
-                oc.campaign_id,
-                o.id as order_id,
-                o.actual_delivery_time as received_at,
-                o.user_id
-            from promotions_promotionalprojectcomponent ppc 
-                join promotions_ordercampaign oc on oc.campaign_id = ppc.component_id
-                join orders_order o on o.id = oc.order_id
-                join catalog_storebranch sb on sb.id = o.shopper_store_branch_id
-            where 1=1
-                [[and ppc.promotional_project_id in ({{project_id}})]]
-                and o.status = 'DELIVERED'
-                and o.currency = 'MXN'
-                [[and o.actual_delivery_time >= {{sampling_desde}} - interval '1 day']]
-                [[and o.actual_delivery_time < {{sampling_hasta}} + interval '2 day']]
-                [[and o.actual_delivery_time at time zone sb.timezone between {{sampling_desde}} and {{sampling_hasta}} + interval '1 day']]
-            ) uo on uo.user_id = o.user_id
-        
-        join orders_orderproduct op on op.order_id = o.id
-        join catalog_product p on p.id = op.product_id
+        c.name as category_name
+    from catalog_product p
         join catalog_productcategorization pc on pc.product_id = p.id
         join catalog_category c on c.id = pc.category_id
         join catalog_brand b on b.id=p.brand_id
-        join brandcenter_brandcentercpg_brands bcpg on bcpg.brand_id = b.id
     where 1=1
-        and (o.actual_delivery_time)::date > uo.received_at
-		and (o.actual_delivery_time)::date < uo.received_at + interval '30 days'
-		[[and o.actual_delivery_time >= {{recompra_desde}} - interval '1 day']]
+        [[and p.id in ({{product_id}})]]
+        [[and b.id in ({{brand_id}})]]
+        and p.currency='MXN'
+    ),
+        
+    campaign_info as 
+    (select
+        (o.actual_delivery_time)::date as received_at,  
+        o.user_id,
+        o.id as order_id,
+        oc.campaign_id,
+        ROW_NUMBER () OVER (PARTITION BY o.user_id ORDER BY order_id) as order_rank
+	from promotions_promotionalprojectcomponent ppc 
+        join promotions_ordercampaign oc on oc.campaign_id = ppc.component_id
+        join orders_order o on o.id = oc.order_id
+	    join catalog_storebranch sb on sb.id = o.shopper_store_branch_id
+	where  1=1
+        [[and ppc.promotional_project_id in ({{project_id}})]]
+        and o.status = 'DELIVERED'
+        and o.currency = 'MXN'
+        [[and o.actual_delivery_time >= {{sampling_desde}} - interval '1 day']]
+        [[and o.actual_delivery_time < {{sampling_hasta}} + interval '2 day']]
+        [[and o.actual_delivery_time at time zone sb.timezone between {{sampling_desde}} and {{sampling_hasta}} + interval '1 day']]
+	),
+	    
+	target_users as 
+	(select
+		(o.actual_delivery_time)::date resale_at,
+        o.id as order_id, 
+		o.user_id,
+		op.product_id,
+		sum(op.quantity) as ordered,
+		sum(op.quantity_found) as found,
+		coalesce(sum(op.quantity_found*op.branch_price), 0)::numeric as sales
+	from orders_orderproduct op
+	    join product_filter pf on pf.product_id = op.product_id
+		join orders_order o on o.id = op.order_id
+		join campaign_info ci on ci.user_id = o.user_id
+	where 1=1
+		--se compró después de recibir el sampling
+		and (o.actual_delivery_time)::date > ci.received_at
+		--se compró a lo más N días después de recibir el sampling
+		and (o.actual_delivery_time)::date < ci.received_at + interval '30 days'
+		[[and o.actual_delivery_time >= {{recompra_desde}} - interval '1 day']] 
         [[and o.actual_delivery_time < {{recompra_hasta}} + interval '2 day']]
         [[and o.actual_delivery_time at time zone sb.timezone between {{recompra_desde}} and {{recompra_hasta}} + interval '1 day']]
-        and o.currency = 'MXN'
-		and o.status = 'DELIVERED'
+	    and ci.order_rank = 1
+	    and o.status = 'DELIVERED'
 		and o.order_kind = 'NORMAL'
-		[[and b.id = {{brand_id}}]]
-		[[and p.id in ({{product_id}})]]
-		[[and bcpg.brandcentercpg_id = {{cpg_id}}]]
-        and p.currency='MXN'
-    group by 1,2,3,4,5,6,7,8,9
-    ) a
-    
-join
-    (select 
-        pp.id as project_id,
-        pp.name as project_name,
-        pp.initial_budget,
-        pp.available_budget,
-        gpc.campaign_ptr_id as campaign_id
-    from promotions_giftproductcampaign gpc
-        join promotions_promotionalprojectcomponent ppc on ppc.component_id = gpc.campaign_ptr_id 
-        join promotions_promotionalproject pp on pp.id = ppc.promotional_project_id 
-    where 1=1
-        and ppc.component_content_type_id = 447
-        and pp.id = {{project_id}}
-    ) b on b.campaign_id = a.campaign_id
+		and o.currency = 'MXN'
+    group by 1,2,3,4
+    )
+
+select 
+    ci.campaign_id,
+    pf.category_name,
+    tot.sampling_users,
+    concat(pf.name,' ',pf.package) as product_name_package,
+    count(distinct tu.user_id) as repurchase_users,
+    sum(tu.ordered) as ordered,
+    sum(tu.found) as found,
+    sum(tu.found)*1.00 / count(distinct tu.user_id) as items_p_order,
+    sum(tu.sales) as sales
+from target_users tu
+    join product_filter pf on pf.product_id = tu.product_id
+    join campaign_info ci on ci.user_id = tu.user_id
+    join 
+        (select
+            campaign_id, 
+            count(distinct user_id) as sampling_users 
+        from campaign_info
+        group by 1
+        ) tot on tot.campaign_id = ci.campaign_id
         
-where a.sales > 0
-group by 1,2,3,4,5,6,7,product_name_package
-order by orders desc;
+where pf.name is not null
+group by 1,2,3,product_name_package
+order by repurchase_users desc,items_p_order desc;
