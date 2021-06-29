@@ -12,7 +12,7 @@ select
     max(op.shopper_price) as max_shopper_price,
     sum(op.quantity) as requested,
     sum(op.quantity_found) as found,
-    count(distinct o.id) as orders,
+    count(distinct op.id) as order_products,
     sum(coalesce(op.quantity_found*op.branch_price,0)) as sales
 from orders_orderproduct op
     join orders_order o on o.id = op.order_id
@@ -46,7 +46,7 @@ select
     0 as max_shopper_price,
     sum(op.quantity) as requested,
     sum(op.quantity_found) as found,
-    count(distinct o.id) as orders,
+    count(distinct op.id) as order_products,
     sum(coalesce(op.quantity_found*op.branch_price,0)) as sales
 from orders_orderproduct op
     join orders_order o on o.id = op.order_id
@@ -61,4 +61,4 @@ where 1=1
     and sb.store_id = {{store_id}}
     [[and sb.id = {{branch_id}}]]
 group by 1,2,3,4,5
-order by orders desc;
+order by level desc, date asc;
