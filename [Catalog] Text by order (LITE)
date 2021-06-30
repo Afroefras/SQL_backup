@@ -1,21 +1,47 @@
+with filter_orders as(
+    select
+        op.order_id,
+        p.name as product_name,
+        op.custom_request
+    from orders_orderproduct op
+        join orders_order o on o.id = op.order_id
+        join catalog_product p on p.id = op.product_id
+        join catalog_productcategorization pc on pc.product_id = p.id
+        join catalog_category c on c.id = pc.category_id
+        join catalog_storebranch sb on sb.id = o.store_branch_id
+    where 1=1
+        [[and sb.city_id in ({{city_id}})]]
+        [[and sb.store_id in ({{store_id}})]]
+        [[and c.id in ({{category_id}})]]
+        and o.currency = 'MXN'
+        and o.actual_delivery_time >= {{desde}} - interval '2 day'
+        and o.actual_delivery_time < {{hasta}} + interval '2 day'
+        and o.actual_delivery_time at time zone sb.timezone >= {{desde}}
+        and o.actual_delivery_time at time zone sb.timezone < {{hasta}} + interval '1 day'
+    ),
+    
+    chat as(
+    select 
+        order_id as order_id,
+        string_agg(concat(custom_request,'::',product_name),'_ ') as custom_request
+    from filter_orders
+    where custom_request <> ''
+    group by 1
+    ),
+
+    custom_p as(select
+        order_id,
+        string_agg(description,'_ ') as custom_product
+    from orders_ordercustomproduct
+    where 1=1
+        and order_id in (select distinct order_id from filter_orders)
+        and description <> ''
+    group by 1
+    )
+    
 select 
-    o.id as order_id,
-    concat(string_agg(concat(op.custom_request,' :: ',p.name),'_ '),'_ ',string_agg(cp.description,'_ ')) as text
-from orders_orderproduct op
-    join orders_order o on o.id = op.order_id
-    join catalog_product p on p.id = op.product_id
-    join catalog_productcategorization pc on pc.product_id = p.id
-    join catalog_category c on c.id = pc.category_id
-    join catalog_storebranch sb on sb.id = o.store_branch_id
-    full join orders_ordercustomproduct cp on cp.order_id = o.id
-where 1=1
-    [[and sb.city_id in ({{city_id}})]]
-    [[and sb.store_id in ({{store_id}})]]
-    [[and c.id in ({{category_id}})]]
-    and (op.custom_request <> '' or cp.description <> '')
-    and o.currency = 'MXN'
-    and o.actual_delivery_time >= {{desde}} - interval '2 day'
-    and o.actual_delivery_time < {{hasta}} + interval '2 day'
-    and o.actual_delivery_time at time zone sb.timezone >= {{desde}}
-    and o.actual_delivery_time at time zone sb.timezone < {{hasta}} + interval '1 day'
-group by 1
+    coalesce(ch.order_id,cp.order_id) as order_id,
+    cp.custom_product,
+    ch.custom_request
+from chat ch
+    full join custom_p cp on cp.order_id = ch.order_id;
