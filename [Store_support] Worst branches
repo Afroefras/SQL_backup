@@ -1,0 +1,27 @@
+select
+    to_char(os.delivereddate_localtime, 'YYYY-MM-DD') as date,
+	os.country,
+	s.id as store_id,
+	s.name as store_name,
+	sb.id as branch_id,
+	sb.name as branch,
+	count(os.order_id) as orders,
+	sum(os.products_found)*1.00 / sum(os.products_ordered) as branch_fr,
+	sum(os.products_found) as products_found,
+	sum(os.products_ordered) as products_ordered
+from orders_ordersummary os
+	join orders_orderattributes oa on os.order_id = oa.order_id
+	join catalog_store s on s.id = oa.store_id
+	join catalog_storebranch sb on oa.branch_id = sb.id
+where 1=1
+	and s.country in ('MX','CL','CO','PE','CR')
+	and os.delivereddate_localtime >= date_trunc('day',current_date) - interval '3 day'
+    and os.delivereddate_localtime < date_trunc('day',current_date)
+	and os.status = 'DELIVERED' 
+	and os.order_kind = 'NORMAL'
+	and s.is_selfservice
+group by 1,2,3,4,5,6
+having 1=1
+    and sum(os.products_found)*1.00 / sum(os.products_ordered) < 0.80
+    and count(os.order_id) > 1
+order by date,country,branch_fr;
