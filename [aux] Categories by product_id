@@ -1,0 +1,6 @@
+select c.id,c.name from catalog_category c join catalog_product p on p.category_id = c.id
+where p.id in (
+
+)
+group by 1,2
+order by 1;
