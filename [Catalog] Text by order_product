@@ -1,0 +1,24 @@
+--85,1003,1004,145,134,136,137,86,538 --categorías con frutas y verduras
+with filter_orders as(
+    select
+        op.order_id,
+        p.name as product_name,
+        op.custom_request
+    from orders_orderproduct op
+        join orders_order o on o.id = op.order_id
+        join catalog_product p on p.id = op.product_id
+        join catalog_productcategorization pc on pc.product_id = p.id
+        join catalog_category c on c.id = pc.category_id
+        join catalog_storebranch sb on sb.id = o.store_branch_id
+    where 1=1
+        [[and sb.city_id in ({{city_id}})]]
+        [[and sb.store_id in ({{store_id}})]]
+        [[and c.id in ({{category_id}})]]
+        and o.currency = 'MXN'
+        and o.actual_delivery_time >= {{desde}} - interval '2 day'
+        and o.actual_delivery_time < {{hasta}} + interval '2 day'
+        and o.actual_delivery_time at time zone sb.timezone >= {{desde}}
+        and o.actual_delivery_time at time zone sb.timezone < {{hasta}} + interval '1 day'
+    )
+    
+select * from filter_orders
