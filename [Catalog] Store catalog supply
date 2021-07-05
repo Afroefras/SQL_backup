@@ -9,9 +9,11 @@ select
     sum(spb.stock) as stock,
     min(spb.last_visited) as min_last_visit
 from supply_product sp
-join supply_productbranch spb on sp.id = spb.product_id
-left join supply_productbarcode sb on sp.id = sb.product_id
+    join supply_productbranch spb on sp.id = spb.product_id
+    left join supply_productbarcode sb on sp.id = sb.product_id
 where 1=1
     and sp.sku_source = 'mx-vinoteca-csv' --'mx-bodegasalianza-csv'
     and spb.last_visited > now()::date - interval '2 days' 
+    and spb.branch is not null
+    and spb.branch <> ''
 group by 1,2,3,4,5,6;
