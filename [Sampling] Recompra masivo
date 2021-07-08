@@ -6,15 +6,17 @@ with product_filter as
         p.name,
         p.package,
         c.id as category_id,
-        c.name as category_name
+        cl.name as category_name
     from catalog_product p
         join catalog_productcategorization pc on pc.product_id = p.id
         join catalog_category c on c.id = pc.category_id
+        join catalog_categorylocalization cl on cl.category_id=c.id
         join catalog_brand b on b.id=p.brand_id
     where 1=1
         [[and p.id in ({{product_id}})]]
         [[and b.id in ({{brand_id}})]]
-        and p.currency='MXN'
+        and p.currency={{currency}}
+        and cl.language='en'
     ),
         
     campaign_info as 
@@ -31,12 +33,12 @@ with product_filter as
 	    join catalog_storebranch sb on sb.id = o.shopper_store_branch_id
 	where 1=1
 	    [[and sd.campaign_id in ({{campaign_id}})]]
+	    and o.currency = {{currency}}
 	    and o.status = 'DELIVERED'
 	    and sd.status = 'DELIVERED'
-	    and o.currency = 'MXN'
-        [[and o.actual_delivery_time >= {{sampling_desde}} - interval '1 day']] 
-        [[and o.actual_delivery_time < {{sampling_hasta}} + interval '2 day']]
-        [[and o.actual_delivery_time at time zone sb.timezone between {{sampling_desde}} and {{sampling_hasta}} + interval '1 day']]
+        [[and o.actual_delivery_time >= {{sampling_from}} - interval '1 day']] 
+        [[and o.actual_delivery_time < {{sampling_until}} + interval '2 day']]
+        [[and o.actual_delivery_time at time zone sb.timezone between {{sampling_from}} and {{sampling_until}} + interval '1 day']]
 	),
 	    
 	target_users as 
@@ -53,16 +55,17 @@ with product_filter as
 		join orders_order o on o.id = op.order_id
 		join campaign_info ci on ci.user_id = o.user_id
 	where 1=1
-	    and ci.order_rank = 1
-	    and o.status = 'DELIVERED'
-		and o.order_kind = 'NORMAL'
-		and o.currency = 'MXN'
 		--se compró después de recibir el sampling
 		and (o.actual_delivery_time)::date > ci.received_at
 		--se compró a lo más N días después de recibir el sampling
 		and (o.actual_delivery_time)::date < ci.received_at + interval '30 days'
-		[[and o.actual_delivery_time >= {{recompra_desde}} - interval '1 day']] 
-        [[and o.actual_delivery_time < {{recompra_hasta}} + interval '2 day']]
+		[[and o.actual_delivery_time >= {{repurchase_from}} - interval '1 day']] 
+        [[and o.actual_delivery_time < {{repurchase_until}} + interval '2 day']]
+        [[and o.actual_delivery_time at time zone sb.timezone between {{repurchase_from}} and {{repurchase_until}} + interval '1 day']]
+	    and ci.order_rank = 1
+		and o.currency = {{currency}}
+	    and o.status = 'DELIVERED'
+		and o.order_kind = 'NORMAL'
     group by 1,2,3,4
     )
 
@@ -81,7 +84,7 @@ from target_users tu
     join product_filter pf on pf.product_id = tu.product_id
     join campaign_info ci on ci.user_id = tu.user_id
     join 
-        (select 
+        (select
             campaign_id, 
             count(distinct user_id) as sampling_users 
         from campaign_info
