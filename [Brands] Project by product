@@ -1,0 +1,54 @@
+select
+    pp.id as project_id,
+    to_char(o.actual_delivery_time at time zone sb.timezone, 'YYYY-MM-DD') as date,
+    s.name as store,
+    sb.name as branch,
+    gc.name as city,
+    o.external_id,
+    case when with_subscription then 'POP' else 'Non_POP' end as user_type,
+    o.user_id,
+    cpg.name as cpg,
+    pp.name as project_name,
+    ppc.component_id as campaign_id,
+    '0' as model,
+    b.name as brand_name,
+    p.id as product_id,
+    p.name as product_name,
+    p.barcodes,
+    p.package,
+    sum(op.quantity) as requested,
+	sum(op.quantity_found) as found,
+	0 as replaced,
+	0 as delivered,
+	(sum(op.quantity_found)*1.00 / sum(op.quantity))*100 as foundrate,
+	coalesce(sum(op.quantity_found*op.branch_price), 0)::numeric as sales,
+	0 as order_budget_used,
+	count(distinct o.id) as unique_orders,
+	count(distinct o.user_id) as unique_users,
+	0 as unique_order_budget_used,
+	0 as banner_visualizations,
+	0 as conversion_rate_banner
+from orders_orderproduct op
+    join orders_order o on o.id = op.order_id
+    join promotions_ordercampaign oc on oc.order_id = o.id
+    join promotions_promotionalprojectcomponent ppc on ppc.component_id = oc.campaign_id
+    join promotions_promotionalproject pp on pp.id = ppc.promotional_project_id
+    join catalog_storebranch sb on sb.id = o.store_branch_id
+    join geo_city gc on gc.id = sb.city_id
+    join catalog_store s on s.id = sb.store_id
+    join catalog_product p on p.id = op.product_id
+    join catalog_brand b on b.id = p.brand_id
+    join brandcenter_brandcentercpg_brands bcpg on bcpg.brand_id = b.id 
+    join brandcenter_brandcentercpg cpg on cpg.id = bcpg.brandcentercpg_id
+where 1=1
+    and pp.id in (14017,14248,14253,15661,16922,17418,18025,18746,18753,19343,19905)
+    and o.actual_delivery_time >= {{desde}} - interval '2 day'
+    and o.actual_delivery_time < {{hasta}} + interval '2 day'
+    and actual_delivery_time at time zone sb.timezone >= {{desde}}
+    and actual_delivery_time at time zone sb.timezone < {{hasta}} + interval '1 day'
+    and gc.country_id = 'MX'
+    and o.currency = 'MXN'
+    and o.status = 'DELIVERED'
+    and o.order_kind = 'NORMAL'
+group by 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17
+limit 2
