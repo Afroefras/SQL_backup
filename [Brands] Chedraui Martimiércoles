@@ -1,0 +1,39 @@
+select
+    gc.name as city_name,
+    pp.name as project_name,
+    o.user_id,
+    o.id as order_id,
+    extract(hour from o.actual_delivery_time - o.created)+
+        extract(minute from o.actual_delivery_time - o.created)/60+
+        extract(second from o.actual_delivery_time - o.created)/(60*60) as hours_elapsed,
+    p.name as product_name,
+    sum(op.quantity) as requested,
+	sum(op.quantity_found) as found,
+	coalesce(sum(op.quantity_found*op.branch_price), 0)::numeric as sales
+from orders_order o 
+    join promotions_ordercampaign oc on oc.order_id = o.id
+    join promotions_promotionalprojectcomponent ppc on ppc.component_id = oc.campaign_id
+    join promotions_promotionalproject pp on pp.id = ppc.promotional_project_id
+    join catalog_storebranch sb on sb.id = o.store_branch_id
+    join geo_city gc on gc.id = sb.city_id
+    join orders_orderproduct op on op.order_id = o.id
+    join catalog_product p on p.id = op.product_id
+where 1=1
+    and pp.name ilike '%chedraui%martimi%'
+    and pp.country_id = 'MX'
+    and pp.category = 'STORE'
+    and pp.valid_from >= {{desde}} - interval '2 day'
+    and pp.valid_until < {{hasta}} + interval '2 day'
+    and pp.valid_from at time zone sb.timezone >= {{desde}}
+    and pp.valid_until at time zone sb.timezone < {{hasta}} + interval '1 day'
+    and o.actual_delivery_time >= {{desde}} - interval '2 day'
+    and o.actual_delivery_time < {{hasta}} + interval '2 day'
+    and o.actual_delivery_time at time zone sb.timezone >= {{desde}}
+    and o.actual_delivery_time at time zone sb.timezone < {{hasta}} + interval '1 day'
+    and not o.on_demand
+    and o.currency = 'MXN'
+    and o.status = 'DELIVERED'
+    and o.order_kind = 'NORMAL'
+    and p.category_id in (85,1003,1004,145,134,136,137,86,538)
+group by 1,2,3,4,5,6
+limit 5
