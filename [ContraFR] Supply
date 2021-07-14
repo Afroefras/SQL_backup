@@ -1,0 +1,29 @@
+select 
+	sku_source,
+	store_id,
+	branch_id,
+	max(allowed_purchasable_products_shared) as max_allowed_purchasable_products_shared
+from (
+    select 
+    to_char(t,'YYYY/MM/DD') as date,
+    ssi.sku_source,
+    ssi.store_id,
+    spb.branch::numeric as branch_id,
+    count(sp.id) filter (where t between spb.created and spb.last_visited and spb.stock>0) as allowed_purchasable_products_shared
+    from supply_storeinfo ssi
+    left join supply_product sp  on sp.sku_source = ssi.sku_source
+    left join supply_productbranch spb on sp.id = spb.product_id
+    join generate_series(now()::Date - interval '7 day', now()::Date, interval '1 day') t on true
+    where 
+        spb.last_visited >= now()::date - interval '7 day' 
+        and ssi.sku_source||'-'||sp.category_id not in 
+            (select sku_source||'-'|| rtrim(source_category)::text as blacklisted_categories 
+            from supply_categorymap
+            where blacklisted='true'
+            )
+        and ssi.store_id in ({{store_id}})
+        and ssi.is_active 
+    group by 1,2,3,4
+    order by branch_id, date asc
+)a
+group by 1,2,3
