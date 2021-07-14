@@ -1,0 +1,17 @@
+select
+    to_char(css.row_updated::date,'YYYY/MM/DD') as date,
+    country,
+    catalog_store_name as store_name,
+    catalog_store_id as store_id,
+    catalog_branch_name as branch_name,
+    catalog_branch_id as branch_id,
+    to_char(css.row_updated::date,'YYYY/MM/DD')::text || '-'||catalog_branch_id as key,
+    css.catalog_products_live,
+    css.catalog_products_live_purchasable
+from ops_controlling.catalog_supply_stats css
+where 1=1
+    and catalog_store_id in (22)
+    and css.row_updated >= now()::date
+    and css.row_updated <> '2020-12-07 18:20:45.24577+00'
+    and catalog_active_branch
+order by country, store_id
