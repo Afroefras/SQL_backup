@@ -23,13 +23,13 @@ from
         where 1=1
             and o.actual_delivery_time >= {{desde}} - interval '2 days'
             and o.actual_delivery_time < {{hasta}} + interval '2 days'
-            and actual_delivery_time at time zone sb.timezone >= {{desde}}
-            and actual_delivery_time at time zone sb.timezone < {{hasta}} + interval '1 day'
-            and gc.country_id = 'MX'
+            and o.actual_delivery_time at time zone sb.timezone >= {{desde}}
+            and o.actual_delivery_time at time zone sb.timezone < {{hasta}} + interval '1 day'
             and o.currency = 'MXN'
             and o.status = 'DELIVERED'
             and o.order_kind = 'NORMAL'
+            and gc.country_id = 'MX'
         ) a
     ) b
-where days_elapsed is not null and days_elapsed >= 1
+where days_elapsed >= 1
 order by 1,2,3,4,5,6;
