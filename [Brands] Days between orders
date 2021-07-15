@@ -4,8 +4,7 @@ select
     to_char(order_date,'IW') as week,
     city,user_id,n_order,requested,found,replaced,sales,days_elapsed
 from
-    (select
-        *,
+    (select *,
         rank() over (partition by user_id order by order_date) as n_order,
         extract(epoch from order_date - lag(order_date) over (partition by user_id order by order_date))/86400 as days_elapsed
     from 
@@ -32,5 +31,5 @@ from
             and o.order_kind = 'NORMAL'
         ) a
     ) b
-where days_elapsed is not null
+where days_elapsed is not null and days_elapsed >= 1
 order by 1,2,3,4,5,6;
