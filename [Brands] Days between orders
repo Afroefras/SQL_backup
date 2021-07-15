@@ -1,28 +1,37 @@
-select
-    *,
-    extract(epoch from order_date - lag(order_date) over (partition by user_id order by order_date))/86400 as days_elapsed
-from 
-    (select 
-        o.actual_delivery_time at time zone sb.timezone as order_date,
-        gc.name as city,
-        o.id as order_id,
-        o.user_id,
-        o.qty_products_ordered as requested,
-        o.qty_products_found as found,
-        o.qty_products_replaced as replaced,
-        o.total_receipt as sales
-    from orders_order o
-        join catalog_storebranch sb on sb.id = o.store_branch_id
-        join geo_city gc on gc.id = sb.city_id
-    where 1=1
-        and o.user_id = 6
-        and o.actual_delivery_time >= {{desde}} - interval '2 days'
-        and o.actual_delivery_time < {{hasta}} + interval '2 days'
-        and actual_delivery_time at time zone sb.timezone >= {{desde}}
-        and actual_delivery_time at time zone sb.timezone < {{hasta}} + interval '1 day'
-        and gc.country_id = 'MX'
-        and o.currency = 'MXN'
-        and o.status = 'DELIVERED'
-        and o.order_kind = 'NORMAL'
-    ) a
+select 
+    to_char(order_date,'YYYY') as year,
+    to_char(order_date,'MM') as month,
+    to_char(order_date,'IW') as week,
+    city,user_id,n_order,requested,found,replaced,sales,days_elapsed
+from
+    (select
+        *,
+        rank() over (partition by user_id order by order_date) as n_order,
+        extract(epoch from order_date - lag(order_date) over (partition by user_id order by order_date))/86400 as days_elapsed
+    from 
+        (select 
+            o.actual_delivery_time at time zone sb.timezone as order_date,
+            gc.name as city,
+            o.id as order_id,
+            o.user_id,
+            o.qty_products_ordered as requested,
+            o.qty_products_found as found,
+            o.qty_products_replaced as replaced,
+            o.total_receipt as sales
+        from orders_order o
+            join catalog_storebranch sb on sb.id = o.store_branch_id
+            join geo_city gc on gc.id = sb.city_id
+        where 1=1
+            and o.user_id = 6
+            and o.actual_delivery_time >= {{desde}} - interval '2 days'
+            and o.actual_delivery_time < {{hasta}} + interval '2 days'
+            and actual_delivery_time at time zone sb.timezone >= {{desde}}
+            and actual_delivery_time at time zone sb.timezone < {{hasta}} + interval '1 day'
+            and gc.country_id = 'MX'
+            and o.currency = 'MXN'
+            and o.status = 'DELIVERED'
+            and o.order_kind = 'NORMAL'
+        ) a
+    ) b
+where days_elapsed is not null
 limit 4
