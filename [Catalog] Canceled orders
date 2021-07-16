@@ -30,10 +30,10 @@ from(
         join catalog_store s on s.id = sb.store_id
         join common_eventoperation ceo on o.id = ceo.reference_id
     where 1=1
-        and o.promised_delivery_time >= date_trunc('week',current_date) - interval '2 week 1 day'
-        and o.promised_delivery_time < date_trunc('week',current_date) - interval '1 week' + interval '1 day'
-        and o.promised_delivery_time at time zone sb.timezone >= date_trunc('week',current_date) - interval '2 week'
-        and o.promised_delivery_time at time zone sb.timezone < date_trunc('week',current_date)- interval '1 week'
+        and o.promised_delivery_time >= date_trunc('week',current_date) - interval '1 week 1 day'
+        and o.promised_delivery_time < date_trunc('week',current_date) + interval '1 day'
+        and o.promised_delivery_time at time zone sb.timezone >= date_trunc('week',current_date) - interval '1 week'
+        and o.promised_delivery_time at time zone sb.timezone < date_trunc('week',current_date)
         and o.order_kind = 'NORMAL'
         and s.country = 'MX'
         and s.status = 'ACTIVE'
