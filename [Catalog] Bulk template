@@ -1,0 +1,14 @@
+select 
+    sb.store_id,
+    pb.id as product_branch_id,
+    '' as price,
+    'AVAILABLE' as availability,
+    '' as schedule
+from catalog_productbranch pb
+    join catalog_storebranch sb on pb.branch_id = sb.id
+    join catalog_product p on pb.product_id = p.id
+where 1=1 
+    and pb.frequently_out_of_stock
+    and p.is_active
+    and sb.active
+    and pb.active
