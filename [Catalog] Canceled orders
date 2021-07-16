@@ -1,7 +1,7 @@
 select 
     year,week,store_id,store,city,
-    count(distinct order_id) as canceled_orders,
-    count(distinct order_id) filter (where products_alternatives_offered>0) as no_alternative_orders,
+    count(distinct order_id) filter (where is_canceled) as canceled_orders,
+    count(distinct order_id) filter (where not is_canceled and status='DELIVERED') as delivered_orders,
     sum(requested_products) as requested,
     sum(not_found_products) as not_found
 from(
@@ -12,24 +12,22 @@ from(
         s.name as store,
         gc.name as city,
         o.id as order_id,
+        o.status,
+        case when(1=1
+                and o.status = 'CANCELED_BY_CM'
+                and ceo.operation_type = 'CANCEL_ORDER'
+                and ceo.detail in ('CLIENT_ASKED_NO_STOCK', 'CLIENT_DIDNT_ANSWER_NO_STOCK','NO_STOCK')
+                and ceo.reference_content_type_id = 25
+                ) then true else false end as is_canceled,
         count(op.quantity) filter(where op.quantity > 0) as requested_products,
-        count(op.id) filter (where op.quantity_found = 0 or op.quantity_found is null) as not_found_products,
-        count(distinct ora.item_id) filter (where (ora.name is not null or ora.product_alternative_id is not null)) as products_alternatives_offered
+        count(op.id) filter (where op.quantity_found = 0 or op.quantity_found is null) as not_found_products
     from orders_orderproduct op
         join orders_order o on o.id = op.order_id
         join catalog_storebranch sb on sb.id = o.store_branch_id
         join geo_city gc on gc.id = sb.city_id
         join catalog_store s on s.id = sb.store_id
         join common_eventoperation ceo on o.id = ceo.reference_id
-        join catalog_product p on p.id = op.product_id
-        join catalog_productbranch pb on pb.product_id = p.id and pb.branch_id = sb.id
-        left join orders_orderreplacementalternativeprocess orap on orap.order_id = o.id
-        left join orders_orderreplacementalternative ora on ora.process_id = orap.id and ora.item_id = p.id
     where 1=1
-        and ceo.operation_type = 'CANCEL_ORDER'
-        and ceo.detail in ('CLIENT_ASKED_NO_STOCK', 'CLIENT_DIDNT_ANSWER_NO_STOCK','NO_STOCK')
-        and o.status = 'CANCELED_BY_CM'
-        and ceo.reference_content_type_id = 25
         and o.promised_delivery_time >= date_trunc('week',current_date) - interval '1 week 1 day'
         and o.promised_delivery_time < date_trunc('week',current_date) + interval '1 day'
         and o.promised_delivery_time at time zone sb.timezone >= date_trunc('week',current_date) - interval '1 week'
@@ -37,9 +35,8 @@ from(
         and o.order_kind = 'NORMAL'
         and s.country = 'MX'
         and s.status = 'ACTIVE'
-        and p.is_active
         and sb.active
-        and pb.active
-    group by 1,2,3,4,5,6
+    group by 1,2,3,4,5,6,7,8
     ) a
 group by 1,2,3,4,5
+having count(distinct order_id) filter (where is_canceled) > 0;
