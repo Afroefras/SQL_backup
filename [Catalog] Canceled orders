@@ -1,5 +1,5 @@
 select 
-    year,week,store,city,
+    year,week,store_id,store,city,
     count(distinct order_id) as canceled_orders,
     count(distinct order_id) filter (where products_alternatives_offered>0) as no_alternative_orders,
     sum(requested_products) as requested,
@@ -8,7 +8,8 @@ from(
     select
         to_char(o.promised_delivery_time at time zone sb.timezone, 'YYYY') as year,
         to_char(o.promised_delivery_time at time zone sb.timezone, 'IW') as week,
-        s.id||' - '||s.name as store,
+        s.id as store_id,
+        s.name as store,
         gc.name as city,
         o.id as order_id,
         count(op.quantity) filter(where op.quantity > 0) as requested_products,
@@ -39,6 +40,6 @@ from(
         and p.is_active
         and sb.active
         and pb.active
-    group by 1,2,3,4,5
+    group by 1,2,3,4,5,6
     ) a
-group by 1,2,3,4
+group by 1,2,3,4,5
