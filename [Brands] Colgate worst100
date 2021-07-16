@@ -1,39 +1,49 @@
-select
-    cpg.name as cpg,
-    to_char(o.actual_delivery_time at time zone sb.timezone,'YYYY-MM-DD') as date,
-    s.name as store,
-    gc.name as city,
-    goz.name as zone,
-    sb.name as branch,
-    concat(p.name,' ',p.package) as product,
-    count(distinct o.id) as orders,
-    count(distinct o.user_id) as users,
-    sum(op.quantity) as quantity_requested,
-	sum(op.quantity_found) as quantity_found,
-	(sum(op.quantity_found)*1.00 / (sum(op.quantity)+1e-10))*100 as foundrate,
-	coalesce(sum(op.quantity_found*op.branch_price), 0)::numeric as sales,
-	coalesce(sum(op.quantity_found*op.branch_price), 0)::numeric / (sum(op.quantity_found)+1e-10) as average_ticket
-from orders_orderproduct op
-    join orders_order o on o.id = op.order_id
-    join catalog_storebranch sb on sb.id = o.store_branch_id
-    join geo_city gc on gc.id = sb.city_id
-    join geo_opzone goz on ST_Intersects(goz.multi_poly, sb.picking_point) and not goz.deleted
-    join catalog_store s on s.id = sb.store_id
-    join catalog_product p on p.id = op.product_id
-    join catalog_brand b on b.id = p.brand_id
-    join brandcenter_brandcentercpg_brands bcpg on bcpg.brand_id = b.id 
-    join brandcenter_brandcentercpg cpg on cpg.id = bcpg.brandcentercpg_id
-where 1=1
-    and o.actual_delivery_time >= date_trunc('day',current_date) - interval '2 days'
-    and o.actual_delivery_time < date_trunc('day',current_date) + interval '1 days'
-    and actual_delivery_time at time zone sb.timezone >= date_trunc('day',current_date) - interval '1 day'
-    and actual_delivery_time at time zone sb.timezone < date_trunc('day',current_date)
-    and cpg.id = 59
-    and gc.country_id = 'MX'
-    and o.currency = 'MXN'
-    and o.status = 'DELIVERED'
-    and o.order_kind = 'NORMAL'
-group by 1,2,3,4,5,6,7
-having count(distinct o.id)>5 or sum(op.quantity_found)*1.00 / (sum(op.quantity)+1e-10) > 0
-order by foundrate
-limit 100;
+with pivot as
+    (select
+        cpg.name as cpg,
+        to_char(o.actual_delivery_time at time zone sb.timezone,'YYYY-IW') as year_week,
+        s.name as store,
+        gc.name as city,
+        goz.name as zone,
+        sb.name as branch,
+        concat(p.name,' ',p.package) as product,
+        count(distinct o.id) as orders,
+        count(distinct o.user_id) as users,
+        sum(op.quantity) as quantity_requested,
+    	sum(op.quantity_found) as quantity_found,
+    	(sum(op.quantity_found)*1.00 / (sum(op.quantity)+1e-10))*100 as foundrate,
+    	coalesce(sum(op.quantity_found*op.branch_price), 0)::numeric as sales,
+    	coalesce(sum(op.quantity_found*op.branch_price), 0)::numeric / (sum(op.quantity_found)+1e-10) as average_ticket
+    from orders_orderproduct op
+        join orders_order o on o.id = op.order_id
+        join catalog_storebranch sb on sb.id = o.store_branch_id
+        join geo_city gc on gc.id = sb.city_id
+        join geo_opzone goz on ST_Intersects(goz.multi_poly, sb.picking_point) and not goz.deleted
+        join catalog_store s on s.id = sb.store_id
+        join catalog_product p on p.id = op.product_id
+        join catalog_brand b on b.id = p.brand_id
+        join brandcenter_brandcentercpg_brands bcpg on bcpg.brand_id = b.id 
+        join brandcenter_brandcentercpg cpg on cpg.id = bcpg.brandcentercpg_id
+    where 1=1
+        and o.actual_delivery_time >= date_trunc('week',current_date) - interval '9 days'
+        and o.actual_delivery_time < date_trunc('week',current_date) + interval '2 days'
+        and actual_delivery_time at time zone sb.timezone >= date_trunc('week',current_date) - interval '1 week'
+        and actual_delivery_time at time zone sb.timezone < date_trunc('week',current_date)
+        and cpg.id = 59
+        and gc.country_id = 'MX'
+        and o.currency = 'MXN'
+        and o.status = 'DELIVERED'
+        and o.order_kind = 'NORMAL'
+    group by 1,2,3,4,5,6,7
+    )
+    
+select * from 
+    (select * from
+        (select *, sum(p.sales) over (partition by p.cpg order by p.quantity_requested desc)/(select sum(sales) from pivot) as cumsum
+        from pivot p
+        ) a
+    where cumsum < 0.8
+    order by foundrate
+    limit 100
+    ) b
+order by cumsum;
