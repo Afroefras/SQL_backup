@@ -1,5 +1,6 @@
 select 
     year,week,store_id,store,city,
+    --branch,
     count(distinct order_id) filter (where is_canceled) as canceled_orders,
     count(distinct order_id) filter (where not is_canceled and status='DELIVERED') as delivered_orders,
     sum(requested_products) as requested,
@@ -11,6 +12,7 @@ from(
         s.id as store_id,
         s.name as store,
         gc.name as city,
+        --sb.name as branch,
         o.id as order_id,
         o.status,
         case when(1=1
@@ -28,15 +30,15 @@ from(
         join catalog_store s on s.id = sb.store_id
         join common_eventoperation ceo on o.id = ceo.reference_id
     where 1=1
-        and o.promised_delivery_time >= date_trunc('week',current_date) - interval '1 week 1 day'
-        and o.promised_delivery_time < date_trunc('week',current_date) + interval '1 day'
-        and o.promised_delivery_time at time zone sb.timezone >= date_trunc('week',current_date) - interval '1 week'
-        and o.promised_delivery_time at time zone sb.timezone < date_trunc('week',current_date)
+        and o.promised_delivery_time >= date_trunc('week',current_date) - interval '2 week 1 day'
+        and o.promised_delivery_time < date_trunc('week',current_date) - interval '1 week' + interval '1 day'
+        and o.promised_delivery_time at time zone sb.timezone >= date_trunc('week',current_date) - interval '2 week'
+        and o.promised_delivery_time at time zone sb.timezone < date_trunc('week',current_date)- interval '1 week'
         and o.order_kind = 'NORMAL'
         and s.country = 'MX'
         and s.status = 'ACTIVE'
         and sb.active
-    group by 1,2,3,4,5,6,7,8
+    group by 1,2,3,4,5,6,7,8--,9
     ) a
-group by 1,2,3,4,5
+group by 1,2,3,4,5--,6
 having count(distinct order_id) filter (where is_canceled) > 0;
