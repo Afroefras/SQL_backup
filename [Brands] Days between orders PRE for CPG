@@ -1,0 +1,23 @@
+select 
+    to_char(o.actual_delivery_time at time zone sb.timezone,'YYYY/MM/DD') as order_date,
+    o.id as order_id,
+    o.user_id,
+    sum(op.quantity) as requested,
+	sum(op.quantity_found) as found,
+	coalesce(sum(op.quantity_found*op.branch_price), 0)::numeric as sales
+from orders_orderproduct op
+    join orders_order o on o.id = op.order_id
+    join catalog_storebranch sb on sb.id = o.store_branch_id
+    join catalog_product p on p.id = op.product_id
+    join catalog_brand b on b.id = p.brand_id
+    join brandcenter_brandcentercpg_brands bcpg on bcpg.brand_id = b.id
+where 1=1
+    and bcpg.brandcentercpg_id = {{cpg_id}}
+    and o.actual_delivery_time >= {{desde}} - interval '2 days'
+    and o.actual_delivery_time < {{hasta}} + interval '2 days'
+    and o.actual_delivery_time at time zone sb.timezone >= {{desde}}
+    and o.actual_delivery_time at time zone sb.timezone < {{hasta}} + interval '1 day'
+    and o.currency = 'MXN'
+    and o.status = 'DELIVERED'
+    and o.order_kind = 'NORMAL'
+group by 1,2,3
