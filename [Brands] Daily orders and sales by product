@@ -1,0 +1,30 @@
+select
+    to_char(o.actual_delivery_time at time zone sb.timezone,'yyyy-mm-dd') as date,
+    cl.name as category,
+    b.name as brand,
+    unnest(p.barcodes) as barcodes,
+    concat(p.name,' ',p.package) as product,
+    count(distinct o.user_id) as users,
+    count(distinct o.id) as orders,
+    sum(op.quantity) as units_requested,
+    sum(op.quantity_found) as units_found,
+    coalesce(sum(op.quantity_found*op.branch_price), 0)::numeric as sales
+from orders_orderproduct op
+    join catalog_product p on p.id = op.product_id
+    join catalog_brand b on b.id = p.brand_id
+    join brandcenter_brandcentercpg_brands bcpg on bcpg.brand_id = b.id
+    join catalog_category c on c.id = p.category_id
+    join catalog_categorylocalization cl on cl.category_id=c.id
+    join orders_order o on o.id = op.order_id
+    join catalog_storebranch sb on sb.id = o.shopper_store_branch_id
+where 1=1
+    and bcpg.brandcentercpg_id = {{cpg_id}}
+    [[and c.id in ({{category_id}})]]
+    and o.actual_delivery_time >= {{desde}} - interval '1 day' 
+    and o.actual_delivery_time < {{hasta}} + interval '2 day'
+    and o.actual_delivery_time at time zone sb.timezone between {{desde}} and {{hasta}} + interval '1 day'
+    and o.currency = 'MXN'
+    and o.status = 'DELIVERED'
+    and o.order_kind = 'NORMAL'
+group by 1,2,3,4,5
+order by date,sales desc;
