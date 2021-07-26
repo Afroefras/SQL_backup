@@ -1,0 +1,10 @@
+select
+    id as project_id,
+    name as project,
+    to_char(valid_from, 'DD/MM/YYYY') as valid_from,
+    to_char(valid_until, 'DD/MM/YYYY') as valid_until,
+    extract(epoch from valid_until-valid_from)/(60*60*24) as days_between
+from promotions_promotionalproject
+where id in (
+
+)
