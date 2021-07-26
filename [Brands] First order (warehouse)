@@ -1,0 +1,12 @@
+select 
+    to_char(o.actual_delivery_time, 'YYYY-MM-DD') as actual_delivery_time,
+    o.order_id,
+    u.user_id,
+    o.store_id,
+    o.branch_id
+from orders_orderattributes o
+    join users_attributes u on u.first_order_id = o.order_id
+where 1=1
+    and o.store_id = {{store_id}}
+    and o.actual_delivery_time >= {{from}}
+    and o.actual_delivery_time < {{until}} + interval '1 day'
