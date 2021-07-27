@@ -1,0 +1,17 @@
+select 
+    o.external_id,
+    to_char(o.promised_delivery_time at time zone sb.timezone, 'YYYY-MM-DD') as date,
+    coalesce(b.name,'SIN MARCA') as brand,
+    sum(op.quantity) as requested,
+    coalesce(sum(op.quantity_found),0) as found,
+    sum(op.cornershop_price) as total_cart
+from orders_orderproduct op
+    join orders_order o on o.id = op.order_id
+    join catalog_storebranch sb on sb.id = o.store_branch_id
+    join catalog_product p on p.id = op.product_id
+    left join catalog_brand b on b.id = p.brand_id
+where 1=1
+    and o.external_id in (
+    
+    )
+group by 1,2,3;
