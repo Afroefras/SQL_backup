@@ -27,11 +27,14 @@ from (
     select *,
         extract(epoch from order_date - lag(order_date) over (partition by user_id order by order_date))/86400 as days_elapsed,
         extract(epoch from order_date - lag(order_date) over (partition by user_id,store_id order by order_date))/86400 as days_elapsed_store,
-        case when n_order = 1 then 'new' else 'not_new' end as tipo_cliente,
-        case when n_order_same_store = 1 then 'new' else 'not_new' end as tipo_cliente_tienda
+        case when n_order = 1 then 'new' else 'not_new' end as client,
+        case when n_order_same_store = 1 then 'new' else 'not_new' end as client_store
     from (
         select
             o.actual_delivery_time at time zone sb.timezone as order_date,
+            s.country,
+            gc.name as city,
+            coalesce(goz.name,'unknown') as zone,
             s.id as store_id,
             s.name as store_name,
             o.user_id,
@@ -46,9 +49,11 @@ from (
             coalesce(o.qty_products_replaced,0) as replaced
         from promo_orders po
             join orders_order o on o.user_id = po.user_id
+            left join promo_orders promo on promo.order_id = o.id
             join catalog_storebranch sb on sb.id = o.store_branch_id
             join catalog_store s on s.id = sb.store_id
-            left join promo_orders promo on promo.order_id = o.id
+            join geo_city gc on gc.id = sb.city_id
+            left join geo_opzone goz on ST_Intersects(goz.multi_poly, sb.picking_point) and not goz.deleted
         where 1=1
             [[and o.actual_delivery_time >= {{order_from}} - interval '2 day']]
             [[and o.actual_delivery_time < {{order_until}} + interval '2 day']]
