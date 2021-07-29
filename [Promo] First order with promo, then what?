@@ -1,34 +1,33 @@
 with promo_orders as(
     select 
+        sb.store_id,
         o.user_id,
         o.id as order_id,
+        o.actual_delivery_time as order_date,
+        'promo_store' as store_type,
         'promo' as order_type
     from orders_order o
+        join catalog_storebranch sb on sb.id = o.store_branch_id
         left join user_store_userstorefirstdelivery usu on o.uuid = usu.order_uuid
         left join user_store_firstdeliveryredemption usf on usu.order_uuid = usf.order_uuid
     where 1=1
         and usf.campaign_uuid = 'd1337462-713f-4581-8fa7-19030eaeb031'
         [[and o.created >= {{promo_from}} - interval '2 day']]
         [[and o.created < {{promo_until}} + interval '2 day']]
-        [[and o.created at time zone 'America/Mexico_City' >= {{promo_from}}]]
-        [[and o.created at time zone 'America/Mexico_City' < {{promo_until}} + interval '1 day']]
+        [[and o.created at time zone sb.timezone >= {{promo_from}}]]
+        [[and o.created at time zone sb.timezone < {{promo_until}} + interval '1 day']]
         and o.status = 'DELIVERED'
         and o.order_kind = 'NORMAL' 
         and o.currency = 'MXN'
-    group by 1,2
-    )
+    group by 1,2,3
+    ),
 
-select *,
-    to_char(order_date,'YYYY') as year,
-    to_char(order_date,'MM') as month,
-    to_char(order_date,'IW') as week,
-    case when days_elapsed = days_elapsed_store then true else false end as next_order_same_store
-from (
+    total as(
     select *,
         extract(epoch from order_date - lag(order_date) over (partition by user_id order by order_date))/86400 as days_elapsed,
         extract(epoch from order_date - lag(order_date) over (partition by user_id,store_id order by order_date))/86400 as days_elapsed_store,
-        case when n_order = 1 then 'new' else 'not_new' end as client,
-        case when n_order_same_store = 1 then 'new' else 'not_new' end as client_store
+        n_order = 1 as new_order,
+        n_order_same_store = 1 as new_order_store
     from (
         select
             o.actual_delivery_time at time zone sb.timezone as order_date,
@@ -39,10 +38,11 @@ from (
             s.name as store_name,
             o.user_id,
             o.id as order_id,
+            coalesce(promo.order_type,'normal') as order_type,
             row_number() over (partition by o.user_id order by o.id) as n_order,
             row_number() over (partition by o.user_id,sb.store_id order by o.id) as n_order_same_store,
-            coalesce(promo.order_type,'normal') as order_type,
-            case when o.uber_order_uuid is null then 'Cornershop' else 'Uber' end as platform,
+            --case when (o.platform = 0 and o.client_bundle like '%uber%') or (o.client_bundle is null and cuv.tmp_uber_original_segmentation = 'Uber') then 'Uber' else 'Cornershop' end as platform_order,
+            case when o.uber_order_uuid is not null then 'Uber' else 'Cornershop' end as platform_order,
             coalesce(o.total_receipt,0) as total_receipt,
             coalesce(o.qty_products_ordered,0) as requested,
             coalesce(o.qty_products_found,0) as found,
@@ -63,4 +63,34 @@ from (
             and o.order_kind = 'NORMAL' 
             and o.currency = 'MXN'
         ) a
-    ) b
+    )
+
+select tot.*,
+    case when tot.order_id > aux.promo_order_id then 'after promo'
+        else case when tot.order_id = aux.promo_order_id then 'promo' 
+        else case when tot.order_id < aux.promo_order_id then 'before promo'
+        else 'What is going on here?' end end end as before_after_promo,
+    aux.client_type,
+    aux.platform_order as platform_user,
+    coalesce(store.store_type,'other_store') as store_type,
+    to_char(tot.order_date,'YYYY') as year,
+    to_char(tot.order_date,'MM') as month,
+    to_char(tot.order_date,'IW') as week,
+    tot.days_elapsed = tot.days_elapsed_store as next_order_same_store
+from total tot
+    left join (select distinct store_id,store_type from promo_orders) store on store.store_id = tot.store_id
+    left join 
+        (
+        select 
+            user_id,
+            order_id as promo_order_id,
+            platform_order,
+            row_number() over (partition by user_id order by order_id) as n,
+            case when new_order and new_order_store then 'Cornershop and store new user'
+                else case when not new_order and new_order_store then 'Just store new user'
+                else case when not new_order and not new_order_store then 'Not a new user' 
+                else 'Impossible: Cornershop new user but not new user at the store' end end end as client_type
+        from total
+        where order_type='promo'
+        ) aux on aux.user_id = tot.user_id
+where aux.n <= 1
