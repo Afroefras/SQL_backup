@@ -18,31 +18,44 @@ with promo_orders as(
     group by 1,2
     )
 
-select
-    *,
-    case when n_order = 1 then 'nuevo' else 'antiguo' end as tipo_cliente,
-    case when n_order_same_store = 1 then 'nuevo' else 'antiguo' end as tipo_cliente_tienda
+select *,
+    to_char(order_date,'YYYY') as year,
+    to_char(order_date,'MM') as month,
+    to_char(order_date,'IW') as week,
+    case when days_elapsed = days_elapsed_store then true else false end as next_order_same_store
 from (
-    select
-        s.id as store_id,
-        s.name as store_name,
-        o.user_id,
-        o.id as order_id,
-        row_number() over (partition by o.user_id order by o.id) as n_order,
-        row_number() over (partition by o.user_id,sb.store_id order by o.id) as n_order_same_store,
-        coalesce(promo.order_type,'normal') as order_type,
-        o.total_receipt,
-        o.qty_products_ordered as requested,
-        o.qty_products_found as found,
-        o.qty_products_replaced as replaced
-    from promo_orders po
-        join orders_order o on o.user_id = po.user_id
-        join catalog_storebranch sb on sb.id = o.store_branch_id
-        join catalog_store s on s.id = sb.store_id
-        left join promo_orders promo on promo.order_id = o.id
-    where 1=1
-        [[and o.actual_delivery_time >= {{order_from}} - interval '2 day']]
-        [[and o.actual_delivery_time < {{order_until}} + interval '2 day']]
-        [[and o.actual_delivery_time at time zone sb.timezone >= {{order_from}}]]
-        [[and o.actual_delivery_time at time zone sb.timezone < {{order_until}} + interval '1 day']]
-    ) a
+    select *,
+        extract(epoch from order_date - lag(order_date) over (partition by user_id order by order_date))/86400 as days_elapsed,
+        extract(epoch from order_date - lag(order_date) over (partition by user_id,store_id order by order_date))/86400 as days_elapsed_store,
+        case when n_order = 1 then 'new' else 'not_new' end as tipo_cliente,
+        case when n_order_same_store = 1 then 'new' else 'not_new' end as tipo_cliente_tienda
+    from (
+        select
+            o.actual_delivery_time at time zone sb.timezone as order_date,
+            s.id as store_id,
+            s.name as store_name,
+            o.user_id,
+            o.id as order_id,
+            row_number() over (partition by o.user_id order by o.id) as n_order,
+            row_number() over (partition by o.user_id,sb.store_id order by o.id) as n_order_same_store,
+            coalesce(promo.order_type,'normal') as order_type,
+            case when o.uber_order_uuid is null then 'Cornershop' else 'Uber' end as platform,
+            coalesce(o.total_receipt,0) as total_receipt,
+            coalesce(o.qty_products_ordered,0) as requested,
+            coalesce(o.qty_products_found,0) as found,
+            coalesce(o.qty_products_replaced,0) as replaced
+        from promo_orders po
+            join orders_order o on o.user_id = po.user_id
+            join catalog_storebranch sb on sb.id = o.store_branch_id
+            join catalog_store s on s.id = sb.store_id
+            left join promo_orders promo on promo.order_id = o.id
+        where 1=1
+            [[and o.actual_delivery_time >= {{order_from}} - interval '2 day']]
+            [[and o.actual_delivery_time < {{order_until}} + interval '2 day']]
+            [[and o.actual_delivery_time at time zone sb.timezone >= {{order_from}}]]
+            [[and o.actual_delivery_time at time zone sb.timezone < {{order_until}} + interval '1 day']]
+            and o.status = 'DELIVERED'
+            and o.order_kind = 'NORMAL' 
+            and o.currency = 'MXN'
+        ) a
+    ) b
