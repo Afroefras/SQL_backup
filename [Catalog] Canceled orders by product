@@ -1,0 +1,75 @@
+with total_op as (
+    select 
+        to_char(o.promised_delivery_time at time zone sb.timezone, 'YYYY-IW') as week,
+        o.external_id,
+        c.name as category,
+        coalesce(b.name,'SIN MARCA') as brand,
+        p.name as product,
+        op.quantity as qty_requested,
+        coalesce(op.quantity_found,0) as qty_found,
+        op.cornershop_price as total_cart
+    from orders_orderproduct op
+        join orders_order o on o.id = op.order_id 
+            and o.external_id in (
+                'MX-001640-9578772'
+                )
+        join catalog_storebranch sb on sb.id = o.store_branch_id
+        join catalog_product p on p.id = op.product_id
+        join catalog_brand b on b.id = p.brand_id
+        join catalog_category c on c.id = p.category_id
+    )
+    
+select
+    week,
+    'category' as level,
+    string_agg(category,', '),
+    sum(requested) as requested,
+    sum(found) as found,
+    sum(total_cart) as total_cart
+from
+    (select
+        week,category,
+        sum(qty_requested) as requested,
+        sum(qty_found) as found,
+        sum(total_cart) as total_cart
+    from total_op group by 1,2 
+    order by requested desc limit 10
+    ) a
+group by 1
+union
+select
+    week,
+    'brand' as level,
+    string_agg(brand,', '),
+    sum(requested) as requested,
+    sum(found) as found,
+    sum(total_cart) as total_cart
+from
+    (select
+        week,brand,
+        sum(qty_requested) as requested,
+        sum(qty_found) as found,
+        sum(total_cart) as total_cart
+    from total_op group by 1,2 
+    order by requested desc limit 10
+    ) a
+group by 1
+union
+select
+    week,
+    'product' as level,
+    string_agg(product,', '),
+    sum(requested) as requested,
+    sum(found) as found,
+    sum(total_cart) as total_cart
+from
+    (select
+        week,product,
+        sum(qty_requested) as requested,
+        sum(qty_found) as found,
+        sum(total_cart) as total_cart
+    from total_op group by 1,2 
+    order by requested desc limit 10
+    ) a
+group by 1
+;
