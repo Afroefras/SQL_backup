@@ -39,26 +39,26 @@ select
     sum(total_cart) as total_cart,
     coalesce(sum(qty_requested) filter(where 1=1
         [[and gc.id in ({{filter_cities}})]]
-        [[and store_id = {{filter_stores}}]]
-        [[and category_id = {{filter_categories}}]]
-        [[and brand_id = {{filter_brands}}]]
-        [[and product_id = {{filter_products}}]]
+        [[and store_id in ({{filter_stores}})]]
+        [[and category_id in ({{filter_categories}})]]
+        [[and brand_id in ({{filter_brands}})]]
+        [[and product_id in ({{filter_products}})]]
         ),0) as filter_requested,
     
     coalesce(sum(qty_found) filter(where 1=1
-        [[and gc.id in ({{filter_cities}]]
-        [[and store_id = {{filter_stores}}]]
-        [[and category_id = {{filter_categories}}]]
-        [[and brand_id = {{filter_brands}}]]
-        [[and product_id = {{filter_products}}]]
+        [[and gc.id in ({{filter_cities}})]]
+        [[and store_id in ({{filter_stores}})]]
+        [[and category_id in ({{filter_categories}})]]
+        [[and brand_id in ({{filter_brands}})]]
+        [[and product_id in ({{filter_products}})]]
         ),0) as filter_found,
     
     coalesce(sum(total_cart) filter(where 1=1
-        [[and gc.id in ({{filter_cities}]]
-        [[and store_id = {{filter_stores}}]]
-        [[and category_id = {{filter_categories}}]]
-        [[and brand_id = {{filter_brands}}]]
-        [[and product_id = {{filter_products}}]]
+        [[and gc.id in ({{filter_cities}})]]
+        [[and store_id in ({{filter_stores}})]]
+        [[and category_id in ({{filter_categories}})]]
+        [[and brand_id in ({{filter_brands}})]]
+        [[and product_id in ({{filter_products}})]]
         ),0) as filter_total_cart
 from total_op 
 where 1=1
@@ -67,5 +67,5 @@ where 1=1
     [[and category_id in ({{categories}})]]
     [[and brand_id in ({{brands}})]]
     [[and product_id in ({{products}})]]
-group by 1
+group by 1,2
 order by week, requested desc;
