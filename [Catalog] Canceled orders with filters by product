@@ -1,38 +1,57 @@
-select 
-    to_char(o.promised_delivery_time at time zone sb.timezone, 'YYYY-IW') as week,
-    gc.id as city_id,
-    s.id as store_id,
-    sb.id as branch_id,
-    coalesce(b.id,0) as brand_id,
-    p.id as product_id,
-    gc.name as city,
-    s.name as store,
-    sb.name as branch,
-    coalesce(b.name,'SIN MARCA') as brand,
-    concat(p.name,'-',p.package) as product,
-    ps."SKU",
-    p.barcodes,
-    sum(op.quantity) as qty_requested,
-    coalesce(sum(op.quantity_found),0) as qty_found
-from orders_orderproduct op
-    join orders_order o on o.id = op.order_id 
-    join catalog_storebranch sb on sb.id = o.store_branch_id
-    join catalog_store s on s.id = sb.store_id
-    join geo_city gc on gc.id = sb.city_id
-    join catalog_product p on p.id = op.product_id
-    join catalog_brand b on b.id = p.brand_id
-    join catalog_category c on c.id = p.category_id
-    join catalog_productstore ps on ps.product_id = p.id and ps.store_id = s.id
+with total_op as (
+    select 
+        to_char(o.promised_delivery_time at time zone sb.timezone, 'YYYY-IW') as week,
+        gc.id as city_id,
+        gc.name as city,
+        s.id as store_id,
+        s.name as store,
+        sb.id as branch_id,
+        sb.name as branch,
+        o.external_id,
+        o.id as order_id,
+        o.user_id,
+        coalesce(b.id,0) as brand_id,
+        coalesce(b.name,'SIN MARCA') as brand,
+        p.id as product_id,
+        concat(p.name,'-',p.package) as product,
+        ps."SKU" as sku,
+        p.barcodes,
+        op.quantity as qty_requested,
+        coalesce(op.quantity_found,0) as qty_found,
+        op.cornershop_price as total_cart
+    from orders_orderproduct op
+        join orders_order o on o.id = op.order_id 
+            and o.external_id in (
+                'MX-001839-4475415',
+                'MX-001863-7769008',
+                'MX-001891-4129775',
+                'MX-002019-9782813'
+                )
+        join catalog_storebranch sb on sb.id = o.store_branch_id
+        join catalog_store s on s.id = sb.store_id
+        join geo_city gc on gc.id = sb.city_id
+        join catalog_product p on p.id = op.product_id
+        join catalog_brand b on b.id = p.brand_id
+        join catalog_productstore ps on ps.product_id = p.id and ps.store_id = s.id
+    )
+    
+select
+    city_id,city,
+    store_id,store,
+    branch_id,branch,
+    brand_id,brand,
+    product_id,product,sku,barcodes,
+    count(distinct order_id) as orders,
+    count(distinct user_id) as users,
+    sum(qty_requested) as requested,
+    sum(qty_found) as found
+from total_op
 where 1=1
-    and o.external_id in
-        (
-        
-        )
     [[and city_id in ({{cities}})]]
     [[and store_id in ({{stores}})]]
     [[and category_id in ({{categories}})]]
     [[and brand_id in ({{brands}})]]
     [[and product_id in ({{products}})]]
-    and op.quantity_found = 0
+    and qty_found = 0
 group by 1,2,3,4,5,6,7,8,9,10,11,12
-order by week, qty_requested desc
+order by requested desc;
