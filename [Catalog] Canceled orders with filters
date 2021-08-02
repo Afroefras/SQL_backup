@@ -6,6 +6,7 @@ with total_op as (
         s.id as store_id,
         s.name as store,
         o.external_id,
+        o.id as order_id,
         c.id as category_id,
         c.name as category,
         coalesce(b.id,0) as brand_id,
@@ -34,15 +35,26 @@ with total_op as (
     
 select
     week,city,
+    count(distinct order_id) as canceled_orders,
     sum(qty_requested) as requested,
     sum(qty_found) as found,
     sum(total_cart) as total_cart,
+    coalesce(count(distinct order_id) filter(where 1=1
+        [[and gc.id in ({{filter_cities}})]]
+        [[and store_id in ({{filter_stores}})]]
+        [[and category_id in ({{filter_categories}})]]
+        [[and brand_id in ({{filter_brands}})]]
+        [[and product_id in ({{filter_products}})]]
+        and qty_found = 0
+        ),0) as filter_canceled_orders,
+        
     coalesce(sum(qty_requested) filter(where 1=1
         [[and gc.id in ({{filter_cities}})]]
         [[and store_id in ({{filter_stores}})]]
         [[and category_id in ({{filter_categories}})]]
         [[and brand_id in ({{filter_brands}})]]
         [[and product_id in ({{filter_products}})]]
+        and qty_found = 0
         ),0) as filter_requested,
     
     coalesce(sum(qty_found) filter(where 1=1
@@ -51,6 +63,7 @@ select
         [[and category_id in ({{filter_categories}})]]
         [[and brand_id in ({{filter_brands}})]]
         [[and product_id in ({{filter_products}})]]
+        and qty_found = 0
         ),0) as filter_found,
     
     coalesce(sum(total_cart) filter(where 1=1
@@ -59,6 +72,7 @@ select
         [[and category_id in ({{filter_categories}})]]
         [[and brand_id in ({{filter_brands}})]]
         [[and product_id in ({{filter_products}})]]
+        and qty_found = 0
         ),0) as filter_total_cart
 from total_op 
 where 1=1
