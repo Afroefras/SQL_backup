@@ -1,0 +1,71 @@
+with total_op as (
+    select 
+        to_char(o.promised_delivery_time at time zone sb.timezone, 'YYYY-IW') as week,
+        gc.id as city_id,
+        gc.name as city,
+        s.id as store_id,
+        s.name as store,
+        o.external_id,
+        c.id as category_id,
+        c.name as category,
+        coalesce(b.id,0) as brand_id,
+        coalesce(b.name,'SIN MARCA') as brand,
+        p.id as product_id,
+        concat(p.name,'-',p.package) as product,
+        op.quantity as qty_requested,
+        coalesce(op.quantity_found,0) as qty_found,
+        op.cornershop_price as total_cart
+    from orders_orderproduct op
+        join orders_order o on o.id = op.order_id 
+            and o.external_id in (
+                'MX-001839-4475415',
+                'MX-001863-7769008',
+                'MX-001891-4129775',
+                'MX-002019-9782813'
+                )
+        join catalog_storebranch sb on sb.id = o.store_branch_id
+        join catalog_store s on s.id = sb.store_id
+        join geo_city gc on gc.id = sb.city_id
+        join catalog_product p on p.id = op.product_id
+        join catalog_brand b on b.id = p.brand_id
+        join catalog_category c on c.id = p.category_id
+    )
+--select * from total_op
+    
+select
+    week,city,
+    sum(qty_requested) as requested,
+    sum(qty_found) as found,
+    sum(total_cart) as total_cart,
+    coalesce(sum(qty_requested) filter(where 1=1
+        [[and gc.id in ({{filter_cities}})]]
+        [[and store_id = {{filter_stores}}]]
+        [[and category_id = {{filter_categories}}]]
+        [[and brand_id = {{filter_brands}}]]
+        [[and product_id = {{filter_products}}]]
+        ),0) as filter_requested,
+    
+    coalesce(sum(qty_found) filter(where 1=1
+        [[and gc.id in ({{filter_cities}]]
+        [[and store_id = {{filter_stores}}]]
+        [[and category_id = {{filter_categories}}]]
+        [[and brand_id = {{filter_brands}}]]
+        [[and product_id = {{filter_products}}]]
+        ),0) as filter_found,
+    
+    coalesce(sum(total_cart) filter(where 1=1
+        [[and gc.id in ({{filter_cities}]]
+        [[and store_id = {{filter_stores}}]]
+        [[and category_id = {{filter_categories}}]]
+        [[and brand_id = {{filter_brands}}]]
+        [[and product_id = {{filter_products}}]]
+        ),0) as filter_total_cart
+from total_op 
+where 1=1
+    [[and gc.id in ({{cities}})]]
+    [[and store_id in ({{stores}})]]
+    [[and category_id in ({{categories}})]]
+    [[and brand_id in ({{brands}})]]
+    [[and product_id in ({{products}})]]
+group by 1
+order by week, requested desc;
