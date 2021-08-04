@@ -1,0 +1,10 @@
+select
+    t_one.table_name as first_table,
+    t_one.column_name as first_column,
+    t_one.ordinal_position as first_position,
+    t_two.table_name as second_table,
+    t_two.column_name as second_column,
+    t_two.ordinal_position as second_position
+from information_schema.columns t_one
+    full outer join information_schema.columns t_two on t_two.column_name = t_one.column_name
+where t_one.table_name = {{first_table}} and t_two.table_name = {{second_table}}
