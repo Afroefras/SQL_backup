@@ -1,0 +1,44 @@
+select
+    to_char(o.actual_delivery_time at time zone sb.timezone,'YYYY-IW') as week,
+    s.name,
+    case when sc.id <> 13 and s.is_longtail=false then 'Non-groceries'
+        when sc.id = 13 and s.is_longtail=false then 'Groceries' else 'Stores' end as store_type,
+    o.id as order_id,
+    p.product_id,
+    p.product,
+    op.quantity as units_requested,
+    op.quantity_found as units_found,
+    coalesce(op.quantity_found*op.branch_price, 0)::numeric as sales
+from orders_orderproduct op
+    join (
+        select 
+            p.id as product_id,
+            c.name as category,
+            b.name as brand,
+            p.barcodes,
+            concat(p.name, ' ', p.package) as product,
+            row_number() over (partition by p.id order by p.id desc) as n
+        from catalog_product p
+            join catalog_brand b on b.id = p.brand_id
+            join brandcenter_brandcentercpg_brands bcpg on bcpg.brand_id = b.id
+            join catalog_category c on c.id = p.category_id
+        where 1=1
+            [[and bcpg.brandcentercpg_id = {{cpg_id}}]]
+            [[and b.id in ({{brand_id}})]]
+            [[and c.id in ({{category_id}})]]
+        ) p on p.product_id = op.product_id
+    
+    join orders_order o on o.id = op.order_id
+    join catalog_storebranch sb on sb.id = o.shopper_store_branch_id
+    join catalog_store s on s.id = sb.store_id
+    join catalog_storecollectionitem sci on sci.store_id = s.id
+    join catalog_storecollection sc on sc.id = sci.collection_id
+where 1=1
+    and o.actual_delivery_time >= {{desde}} - interval '1 day' 
+    and o.actual_delivery_time < {{hasta}} + interval '2 day'
+    and o.actual_delivery_time at time zone sb.timezone >= {{desde}} 
+    and o.actual_delivery_time at time zone sb.timezone < {{hasta}} + interval '1 day'
+    and p.n = 1
+    and o.currency = 'MXN'
+    and o.status = 'DELIVERED'
+    and o.order_kind = 'NORMAL';
