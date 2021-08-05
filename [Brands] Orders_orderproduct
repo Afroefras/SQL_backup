@@ -1,0 +1,34 @@
+select
+    to_char(o.actual_delivery_time at time zone sb.timezone,'YYYY-IW') as week,
+    o.id as order_id,
+    p.product_id,
+    p.product,
+    op.quantity as units_requested,
+    op.quantity_found as units_found,
+    coalesce(op.quantity_found*op.branch_price, 0)::numeric as sales
+from orders_orderproduct op
+    join (
+        select 
+            p.id as product_id,
+            b.name as brand,
+            p.barcodes,
+            concat(p.name, ' ', p.package) as product,
+            row_number() over (partition by p.id order by p.id desc) as n
+        from catalog_product p
+            join catalog_brand b on b.id = p.brand_id
+        where 1=1
+            [[and b.id in ({{brand_id}})]]
+            [[and c.id in ({{category_id}})]]
+        ) p on p.product_id = op.product_id
+    
+    join orders_order o on o.id = op.order_id
+    join catalog_storebranch sb on sb.id = o.shopper_store_branch_id
+where 1=1
+    and o.actual_delivery_time >= {{desde}} - interval '1 day' 
+    and o.actual_delivery_time < {{hasta}} + interval '2 day'
+    and o.actual_delivery_time at time zone sb.timezone >= {{desde}} 
+    and o.actual_delivery_time at time zone sb.timezone < {{hasta}} + interval '1 day'
+    and p.n = 1
+    and o.currency = 'MXN'
+    and o.status = 'DELIVERED'
+    and o.order_kind = 'NORMAL';
