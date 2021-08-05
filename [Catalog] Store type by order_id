@@ -1,0 +1,12 @@
+select
+    o.id as order_id,
+    s.name,
+    case when sc.id <> 13 and s.is_longtail=false then 'Key account'
+        when sc.id = 13 and s.is_longtail=false then 'Groceries' else 'Self-service' end as "BizDev"
+from orders_order o
+    join catalog_storebranch sb on sb.id = o.store_branch_id
+    join catalog_store s on s.id = sb.store_id
+    join catalog_storecollectionitem sci on sci.store_id = s.id
+    join catalog_storecollection sc on sc.id = sci.collection_id
+--where o.id in ()
+limit 2
