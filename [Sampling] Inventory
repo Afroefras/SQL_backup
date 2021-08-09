@@ -1,0 +1,42 @@
+select 
+    now() at time zone 'America/Mexico_City' as capture_date,
+    sc.old_sampling_id as campaign_id,
+    sc.name as sampling_campaign,
+    sc.is_active,
+    sc.starts_at,
+    sc.ends_at,
+    extra_filters->'TOP_SHOPPER' as top_shopper,
+    extra_filters->'NEW_CUSTOMER' as new_customer,
+    extra_filters->'POP_CUSTOMER' as pop_customer,
+    p.id as product_id,
+    p.name as product_name,
+    sc.max_customer_allowed_quantity,
+    sum(cc.quantity) as total_quantity,
+    string_agg(distinct g.name,', ') as cities,
+    (coalesce(sum(t.quantity) filter (where o2.owner_class='USER_ROOM'),0) - coalesce(sum(t.quantity) filter (where o1.owner_class='USER_ROOM'),0)) 
+        + (coalesce(sum(t.quantity) filter (where o2.content_type_id = 6),0)- coalesce(sum(t.quantity) filter (where o1.content_type_id=6),0))  as total_entregado,
+    coalesce(sum(t.quantity) filter (where o2.content_type_id = 38),0) - coalesce(sum(t.quantity) filter (where o1.content_type_id=38),0) as shoppers,
+    sum(cc.quantity) - (coalesce(sum(t.quantity) filter (where o1.owner_class='WAREHOUSE'),0) - coalesce(sum(t.quantity) filter (where o2.owner_class='WAREHOUSE'),0)) as bodega,
+    coalesce(sum(t.quantity) filter (where o2.owner_class='HOTSPOT'),0) - coalesce(sum(t.quantity) filter (where o1.owner_class='HOTSPOT'),0) as pod,
+    coalesce(sum(t.quantity) filter (where o2.owner_class='LOSSES'),0) - coalesce(sum(t.quantity) filter (where o1.owner_class='LOSSES'),0) as mermas, 
+    coalesce(sum(t.quantity) filter (where o2.owner_class='DUMPSTER'),0) - coalesce(sum(t.quantity) filter (where o1.owner_class='DUMPSTER'),0) as bajas, 
+    coalesce(sum(t.quantity) filter (where o2.owner_class='REPLENISHMENT'),0) - coalesce(sum(t.quantity) filter (where o1.owner_class='REPLENISHMENT'),0) as reposiciones,
+    coalesce(sum(t.quantity) filter (where o2.owner_class='USER_ROOM'),0) - coalesce(sum(t.quantity) filter (where o1.owner_class='USER_ROOM'),0) as bodega_usuarios,
+    coalesce(sum(t.quantity) filter (where o2.content_type_id=6),0)- coalesce(sum(t.quantity) filter (where o1.content_type_id=6),0)  as usuarios 
+from inventory_inventorytransaction t
+    join inventory_inventoryowner o1 on o1.id = t.owner_from_id
+    join inventory_inventoryowner o2 on o2.id = t.owner_to_id
+    join inventory_inventoryasset a on t.asset_id = a.id
+    join inventory_itemcategory ic on a.id = ic.item_id
+    join inventory_category c on ic.category_id = c.id
+    join inventory_sampling_campaign sc on sc.old_sampling_id = a.asset_id
+    join inventory_sampling_campaignsamplecomposition cc on cc.campaign_uuid = sc.uuid
+    join inventory_sampling_sampleproduct sp on sp.uuid = cc.sample_product_uuid
+    join catalog_product p on p.uuid = sp.product_uuid
+    join geo_city g on o1.owner_city_id = g.id
+where 1=1
+    and g.country_id = 'MX'
+    and c.id = 43 --Categoría de inventario=Sampling 
+    and sc.is_active --Status campaña
+group by 1,2,3,4,5,6,7,8,9,10,11,12
+order by 2
