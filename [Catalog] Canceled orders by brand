@@ -1,17 +1,24 @@
-select 
-    coalesce(b.name,'SIN MARCA') as brand,
-    sum(op.quantity) as qty_requested,
-    coalesce(sum(op.quantity_found),0) as qty_found,
-    sum(op.cornershop_price) as total_cart
-from orders_orderproduct op
-    join orders_order o on o.id = op.order_id
-    join catalog_storebranch sb on sb.id = o.store_branch_id
-    join catalog_product p on p.id = op.product_id
-    left join catalog_brand b on b.id = p.brand_id
-where 1=1
-    and o.external_id in (
-
-    )
-group by 1
-order by qty_requested desc
-limit 50;
+select * from    
+    (select *,
+        sum(qty_requested) over (order by qty_requested desc)/sum(qty_requested) over () as cumsum
+    from
+        (select 
+            coalesce(b.name,'without_brand') as brand,
+            sum(op.quantity) as qty_requested,
+            coalesce(sum(op.quantity_found),0) as qty_found,
+            sum(op.cornershop_price) as total_cart
+        from orders_orderproduct op
+            join orders_order o on o.id = op.order_id
+            join catalog_storebranch sb on sb.id = o.store_branch_id
+            join catalog_product p on p.id = op.product_id
+            left join catalog_brand b on b.id = p.brand_id
+        where 1=1
+            and o.external_id in (
+            
+            )
+            and op.quantity_found = 0
+        group by 1
+        ) a
+    order by qty_requested desc
+    ) b
+where cumsum < 0.5;
