@@ -1,0 +1,25 @@
+select * from    
+    (select *,
+        sum(qty_requested) over (partition by week order by qty_requested desc)/sum(qty_requested) over (partition by week) as cumsum
+    from
+        (select 
+            to_char(o.promised_delivery_time at time zone sb.timezone, 'YYYY-IW') as week,
+            coalesce(s.id,0) as store_id,
+            coalesce(s.name,'without_brand') as store,
+            sum(op.quantity) as qty_requested,
+            coalesce(sum(op.quantity_found),0) as qty_found,
+            sum(op.cornershop_price) as total_cart
+        from orders_orderproduct op
+            join orders_order o on o.id = op.order_id
+            join catalog_storebranch sb on sb.id = o.store_branch_id
+            join catalog_store s on s.id = sb.store_id
+        where 1=1
+            and o.external_id in (
+            
+            )
+            and op.quantity_found = 0
+        group by 1,2,3
+        ) a
+    order by week desc, qty_requested desc
+    ) b
+where cumsum < 0.5;
