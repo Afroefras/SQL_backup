@@ -1,0 +1,22 @@
+select 
+    b.id as brand_id,
+    b.name as brand_name,
+    count(distinct c.id) as n_categories,
+    string_agg(distinct c.id::text, ', ') as category_ids,
+    string_agg(distinct c.name, ', ') as category_names_es,
+    string_agg(distinct cl.name, ', ') as category_names_en,
+    string_agg(distinct cpg.id::text, ', ') as cpg_ids,
+    string_agg(distinct cpg.name, ', ') as cpg_names
+from catalog_product p
+    join catalog_category c on c.id = p.category_id
+    join catalog_categorylocalization cl on cl.category_id = c.id
+    join catalog_brand b on b.id = p.brand_id
+    join brandcenter_brandcentercpg_brands bcpg on bcpg.brand_id = b.id
+    join brandcenter_brandcentercpg cpg on cpg.id = bcpg.brandcentercpg_id
+where 1=1
+    and b.name ~* 'Nestlé Agüitas|Nestlé|Ciel Exprim|Sta. María|Epurita|E purita|LaCroix|Perrier|Perrier & Juice|Peñafiel|Velvet|Acqua Panna|Ciel|San Pellegrino|S Pellegrino|Zoé Water|Selecto|Agua de Piedra|Garci Crespo|Happy Baby Organics|Parent s Choice|Punta Del Cielo|Nescafé Dolce Gusto|Garat|Illy|Los Portales|SF Bay Coffee|Blasón|Nescafé|Davidoff|Juan Valdez|Legal|Moretto|Oro|Starbucks|Campo Vivo|Carlos V|Zucaritas|Special K|Extra|Choco krispis|Corn flakes|Froot Loops|Corn Pops|All Bran|Kellogg s|La Lechera|Post|Ibarra|Don Gustavo|La Suiza|Moctezuma|Abuelita|Hershey s|Kinder Délice|M&M s|Snickers|Milky Way|Twix|Larín|Tin Larín|Kinder|Kinder Sorpresa|Ritter Sport|Califia Farms|International Delight|Delight|Lautrec|Lyncott|Crosse & Blackwell|Maggi|Kikkoman|Aptamil|Nutricia Aptamil|Nan|Frisolac|Sma Comfort Gold|Wyeth|Similac|Abbott|Carnation|Nutri Leche|Nutrileche|Nutri Rindes|Alpura|Nido|Pisa Nutricionales|Soyalac|Full Circle|Granvita|Gud|Güd|Nature s Heart|Pronto|Campeón|Purina Mainstay|Mainstay|NatDog|Tidy Cats|The Top Choice|Top Choice|Avena Rivero|Cal C Tose|Choco Milk|Culto|Dul Cerel|Frubotanas|McCormick|Therbal|Twinings Of London|Dog Chow|Svelty|Perrier|Starbucks|Cat Chow|Fancy Feast|Gerber|Gerber|Felix|Trix|Nesquik|Nesquik|Abuelita|Beneful|Carlos V|Cheerios|Coffee Mate|Consomate|Crunch|La Lechera|Larín|Lucky Charms|Morelia|Nature s Heart|Nature s Heart|Nature s Heart|Nature s Heart|Terrafertil|Corn Flakes|Fitness|Nestum|Pureza Vital|Cerelac|taster s Choice|Beggin|Pro Plan|Smoochies|Kit Kat|Good Start|One|Dentalife|Freskas|Good Care|Cookie Crisp|Almon Ris|Cinnamon Toast Crunch|Alpo|Gatina|Nescafé|Ades|Knorr|Heinz|Evian|Evian|Pedigree|Quaker|Snickers|Milky Way|Ferrero|Silk|Jacobs|Lindt|Aires de Campo|Alessa|Alpura|Be Light|Bonafont|Calahua|Cashitas|Ciel|Davenport|Enfagrow|Enfamil|ePura|Fiji|Fiji|Ganador|Internacional|kisses|la corona|La Pastora|Lala|Mafer|Peñafiel|Turin|Peñafiel Twist|Topo Chico|Kashi|Almond Breeze|Belara|Nurturme|A de Coco|Bonafont Kids|Lala Vita|Genomma Lab|Nature´s path|Bonafont Levité|Bonafont Juizzy|Very|Skarch|La Costeña'
+    and cpg.country_id = 'MX'
+    and p.is_active
+    and cl.language = 'en'
+group by 1,2
+order by n_categories desc;
