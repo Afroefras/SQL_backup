@@ -1,0 +1,120 @@
+select
+     db.store_id
+    , db.store_name
+    , db.country
+    , db.order_id
+    --ATTRIBUTE
+    , case when db.receipt_after_taxes = db.total_products_wo_store_markup then 'No markup'
+        when db.order_markup_dolars between -0.1 and 0.1 then 'No markup'
+        when db.expired_promo = 'Expired promo' and db.order_markup < 0 and (-db.order_discount/2) between 1.4*db.order_markup and 0.6*db.order_markup then 'Expired promo'
+        when db.order_markup < 0 and (-db.order_discount) between 1.3*db.order_markup and 0.7*db.order_markup then 'Wrong promo applied'
+        when db.qty_receipts>1 and db.markup_pctg between 0.53 and 0.47 then 'Duplicated Receipt'
+        when db.qty_receipts>1 and db.markup_pctg < -0.25 then 'Multiple Receipt'
+        when db.tax_difference between 0.7*db.order_markup and 1.3*db.order_markup then 'Tax difference'
+        when db.same_branch = 0 and abs(db.markup_pctg) between -0.1 and 0.1 then 'Different branch'
+        when db.same_day = 0 and abs(db.markup_pctg) between -0.1 and 0.1 then 'Different day'
+        else 'Different Price/Product' end cause
+    , case when db.order_markup_dolars >= 0.1 then 'Markup'
+        when db.order_markup_dolars <= -0.1 then 'Markdown'
+        else 'No Markup'end kind
+    , count(distinct db.order_id) as orders
+    , sum(db.order_markup) total_markup
+        from (
+select
+            o.id order_id
+            ,sd.discount order_discount
+            ,case when o.total_receipt is not null then 1 else 0 end consolidated_order
+            ,case when o.shopper_store_branch_id = o.store_branch_id then 1 else 0 end same_branch
+            ,case when o.created::date = o.actual_delivery_time::date then 1 else 0 end same_day
+            ,count(ror.order_id) as qty_receipts
+            ,case when cs.country in ('CA', 'US') then sum(coalesce(cg.value::numeric, fv.value::numeric, ror.shopper_total, 0)) 
+            else coalesce(o.total_receipt, o.shopper_total_receipt)
+            end as receipt_after_taxes
+            ,(o.total - o.delivery_charged - coalesce(och_m.price_charged, 0) - coalesce(och_cf.price_charged, 0)+ coalesce(d.discount, 0))/(1 + coalesce(csb.markup_pctg, 0)/100)  total_products_wo_store_markup
+            ,(o.total - o.delivery_charged - coalesce(och_m.price_charged, 0) + coalesce(d.discount, 0))/(1 + coalesce(csb.markup_pctg, 0)/100) - (case when cs.country in ('CA', 'US') then sum(coalesce(cg.value::numeric, fv.value::numeric, ror.shopper_total, 0)) 
+            else coalesce(o.total_receipt, o.shopper_total_receipt)
+            end) order_markup
+            ,((o.total - o.delivery_charged - coalesce(och_m.price_charged, 0) + coalesce(d.discount, 0))/(1 + coalesce(csb.markup_pctg, 0)/100) - (case when cs.country in ('CA', 'US') then sum(coalesce(cg.value::numeric, fv.value::numeric, ror.shopper_total, 0)) 
+            else coalesce(o.total_receipt, o.shopper_total_receipt)
+            end))/ greatest(coalesce(o.total_receipt, o.shopper_total_receipt), 1)::numeric markup_pctg
+            ,case when sd.min_promo_valid_until < o.actual_delivery_time then 'Expired promo' else 'Non expired'end expired_promo
+            ,cs.id store_id
+            ,cs.name store_name
+            ,cs.country
+            ,((o.total - o.delivery_charged - coalesce(och_m.price_charged, 0) + coalesce(d.discount, 0))/(1 + coalesce(csb.markup_pctg, 0)/100) - 
+            (case when cs.country in ('CA', 'US') then sum(coalesce(cg.value::numeric, fv.value::numeric, ror.shopper_total, 0)) 
+            else coalesce(o.total_receipt, o.shopper_total_receipt)
+            end))/gc.currency_rate  order_markup_dolars
+            , (o.actual_delivery_time at time zone csb.timezone) as Date
+            , o.shopper_store_branch_id branch_id
+            , csb.city_id
+            , gci.name city_name
+            ,ror.sales_tax_amount-och_t.price_charged tax_difference
+        from catalog_store cs 
+        join catalog_storebranch csb on csb.store_id = cs.id
+        join orders_order o on o.store_branch_id = csb.id
+        join geo_country gc on gc.code = cs.country
+        join geo_city gci on csb.city_id = gci.id
+        left join orders_chargeableitem och_m on och_m.order_id = o.id and och_m.type = 'MARKUP'
+        left join orders_chargeableitem och_cf on o.id = och_cf.order_id and och_cf.type = 'CONTINGENCY_FEE'
+        left join orders_chargeableitem och_t on o.id = och_t.order_id and och_t.type = 'TAXES'
+        left join receipts_orderreceipt ror on ror.order_id = o.id and ror.valid
+        left join consolidator_goal cg on ror.id = cg.target_id and cg.target_content_type_id = 120 and cg.check_type_id = 40 and cg.consolidated
+        left join common_eventoperation ceo on ceo.reference_content_type_id = 25 and ceo.reference_id = o.id and ceo.operation_type = 'ORDER_SET_AS_FREE_OF_CHARGE'
+        left join (
+                SELECT fv.receipt_id
+                    ,fv.value
+                FROM receipts_orderreceiptfieldvalue fv
+                JOIN receipts_storereceiptfielddefinition fd ON fv.field_definition_id = fd.id AND fd.name = 'total_after_taxes'
+            ) fv ON ror.id = fv.receipt_id
+        left join 
+        (
+        
+            SELECT coalesce(sum(discount), 0) AS discount, order_id
+            FROM promotions_ordercampaign oc
+            JOIN orders_order o ON o.id = order_id
+            JOIN catalog_storebranch csb on o.shopper_store_branch_id = csb.id
+            WHERE NOT EXISTS
+               (SELECT 1
+                FROM promotions_freedeliverycampaign fc
+                WHERE campaign_ptr_id = oc.campaign_id
+                  AND NOT o.with_subscription
+                UNION SELECT 1
+                FROM promotions_campaign pc
+                WHERE 
+                    is_store_promotion AND
+                    oc.campaign_id=pc.id 
+                ) 
+                    and o.actual_delivery_time between {{start_date}} - interval '2 day' and {{end_date}} + interval '2 day' -- Filter date (2). Must be un dae before and after filter (1)
+            GROUP BY order_id
+        ) d on  d.order_id = o.id 
+    left join 
+        (
+        
+            SELECT coalesce(sum(discount),0) AS discount, order_id
+            , min(pc.valid_until) min_promo_valid_until
+            FROM promotions_campaign pc
+            join promotions_ordercampaign oc on oc.campaign_id = pc.id
+            JOIN orders_order o ON o.id=order_id
+            JOIN catalog_storebranch csb on o.shopper_store_branch_id = csb.id
+            WHERE EXISTS
+               (SELECT 1
+                FROM promotions_campaign pc
+                WHERE 
+                    is_store_promotion AND
+                    oc.campaign_id=pc.id  
+                ) 
+                    and o.actual_delivery_time between {{start_date}} - interval '2 day' and {{end_date}} + interval '2 day' -- Filter date (2). Must be un dae before and after filter (1)
+            GROUP BY order_id
+        
+        ) sd on o.id = sd.order_id  
+        where 
+            o.status = 'DELIVERED'  
+            and o.order_kind = 'NORMAL'  
+            and ceo.reference_id is null
+            and o.actual_delivery_time between {{start_date}} - interval '2 day' and {{end_date}} + interval '2 day' 
+            and (o.actual_delivery_time at time zone csb.timezone)::date between {{start_date}} and {{end_date}}
+            and cs.country = {{country}}
+            and cs.id = {{store_id}}
+group by 1,2,3,4,8, cs.country, och_m.price_charged, d.discount,csb.markup_pctg,11,12,13,14,gc.currency_rate,16,17,18,19,20
+) db group by 1,2,3,4,5,6
