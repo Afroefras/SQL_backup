@@ -1,0 +1,27 @@
+select 
+    coalesce(c.id, 0) as category_id,
+    coalesce(c.name, 'sin_categoria') as category_name_es,
+    coalesce(cl.name, 'without_category') as category_name_en,
+    coalesce(b.id, 0) as brand_id,
+    coalesce(b.name, 'without_brand') as brand,
+    p.id as product_id,
+    concat(p.name, ', ', p.package) as product,
+    sb.id as branch_id,
+    sb.name as branch,
+    count(distinct o.id) as orders,
+    avg(op.cornershop_price) as cornershop_price,
+    avg(op.branch_price) as branch_price,
+    avg(op.shopper_price) as shopper_price
+from orders_orderproduct op
+    join orders_order o on o.id = op.order_id
+    join catalog_storebranch sb on sb.id = o.shopper_store_branch_id
+    join catalog_product p on p.id = op.product_id
+    left join catalog_brand b on b.id = p.brand_id
+    left join catalog_category c on c.id = p.category_id
+    left join catalog_categorylocalization cl on cl.category_id = c.id
+where o.id in (
+
+) and cl.language = 'en'
+group by 1,2,3,4,5,6,7,8,9
+having avg(op.cornershop_price) <> avg(op.branch_price) or avg(op.cornershop_price) <> avg(op.shopper_price)
+order by orders desc;
