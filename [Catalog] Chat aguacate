@@ -1,0 +1,25 @@
+select
+    distinct o.id as order_id,
+    date_trunc('day', o.actual_delivery_time at time zone 'America/Mexico_City') as date,
+    gc.name as city,
+    s.id as store_id,
+    s.name as store,
+    o.user_id,
+    cm.messages
+from orders_orderproduct op 
+    join catalog_product p on p.id = op.product_id
+    join orders_order o on o.id = op.order_id
+    join messaging_chatmessages cm on cm.order_uuid = o.uuid
+    join catalog_storebranch sb on sb.id = o.store_branch_id
+    join catalog_store s on s.id = sb.store_id
+    join geo_city gc on gc.id = sb.city_id
+where 1=1
+    and p.id in (4473026,4464908,4473025,4411652,4295822,3878205,4183303,1882668,120855,4030374,3588880,4413939,3465276,4095182,3382821,3443677,3509215,3068581,3222317,2968366,3429220,151945,3030354,3467383,152662,2763312,325094,2567230,4428023,4232321,4328468,3638389,2146126,2061688,4318543,2756522,1232661,2143571,3761257,1955083,1143784,183713,2022567,2011290,2194394,2304458,1607288,1607235,1594569,1876685,2773359,208862,1579256,1572462,1547842,1572456,1637567,1142463,1834864,1468222,2642694,3377866,1142359,103603,1466609,1298234,2105057,1231639,1238579,2774750,206884,3907056,536362,103487,1246765,296468,183699,994771,382972,388567,395955,313654,609482,417102,378938,318637,382314,379667,354781)
+    and op.quantity_found = 0
+    and p.currency = 'MXN'
+    and p.is_active
+    and o.promised_delivery_time >= {{from}} - interval '1 day' 
+    and o.promised_delivery_time < {{until}} + interval '2 day'
+    and o.promised_delivery_time at time zone 'America/Mexico_City' >= {{from}} 
+    and o.promised_delivery_time at time zone 'America/Mexico_City' < {{until}} + interval '1 day'
+    and o.currency = 'MXN';
