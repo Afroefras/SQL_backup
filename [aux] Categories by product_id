@@ -1,6 +1,8 @@
-select c.id,c.name from catalog_category c join catalog_product p on p.category_id = c.id
+select c.id as category_id, c.name as category, count(distinct p.id) as products
+from catalog_category c join catalog_product p on p.category_id = c.id
 where p.id in (
 
 )
+and p.is_active
 group by 1,2
-order by 1;
+order by 3 desc;
