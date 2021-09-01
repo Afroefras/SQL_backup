@@ -1,0 +1,23 @@
+--brand_id	brand_name	n_categories	category_ids	category_names_es	category_names_en	cpg_ids	cpg_names
+select 
+    p.id as product_id,
+    b.id as brand_id,
+    b.name as brand,
+    c.id as category_id, 
+    c.name as category_names_en,
+    cl.name as category_names_en,
+    string_agg(distinct cpg.id::text, ', ') as cpg_ids,
+    string_agg(distinct cpg.name, ', ') as cpg_names
+from catalog_product p
+    join catalog_category c on c.id = p.category_id 
+    join catalog_categorylocalization cl on cl.category_id = c.id
+    left join catalog_brand b on b.id = p.brand_id
+    left join brandcenter_brandcentercpg_brands bcpg on bcpg.brand_id = b.id
+    left join brandcenter_brandcentercpg cpg on cpg.id = bcpg.brandcentercpg_id
+where p.id in 
+    (
+
+    )
+    and p.is_active
+    and cl.language = 'en'
+group by 1,2,3,4,5,6;
