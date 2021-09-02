@@ -1,12 +1,13 @@
 with pivot as
     (select
         cpg.name as cpg,
-        to_char(o.actual_delivery_time at time zone sb.timezone,'YYYY-IW') as year_week,
+        date_trunc('week', o.actual_delivery_time at time zone 'America/Mexico_City') as week,
         s.name as store,
         gc.name as city,
         goz.name as zone,
         sb.name as branch,
         concat(p.name,' ',p.package) as product,
+        p.barcodes,
         count(distinct o.id) as orders,
         count(distinct o.user_id) as users,
         sum(op.quantity) as quantity_requested,
@@ -25,25 +26,28 @@ with pivot as
         join brandcenter_brandcentercpg_brands bcpg on bcpg.brand_id = b.id 
         join brandcenter_brandcentercpg cpg on cpg.id = bcpg.brandcentercpg_id
     where 1=1
-        and o.actual_delivery_time >= date_trunc('week',current_date) - interval '9 days'
-        and o.actual_delivery_time < date_trunc('week',current_date) + interval '2 days'
-        and actual_delivery_time at time zone sb.timezone >= date_trunc('week',current_date) - interval '1 week'
-        and actual_delivery_time at time zone sb.timezone < date_trunc('week',current_date)
         and cpg.id = 59
         and gc.country_id = 'MX'
+        and o.actual_delivery_time >= date_trunc('week', current_date) - interval '9 days'
+        and o.actual_delivery_time < date_trunc('week', current_date) + interval '2 days'
+        and o.actual_delivery_time at time zone 'America/Mexico_City' >= date_trunc('week', current_date) - interval '1 week'
+        and o.actual_delivery_time at time zone 'America/Mexico_City' < date_trunc('week', current_date)
         and o.currency = 'MXN'
         and o.status = 'DELIVERED'
         and o.order_kind = 'NORMAL'
-    group by 1,2,3,4,5,6,7
+    group by 1,2,3,4,5,6,7,8
     )
     
-select * from 
+select 
+    cpg,to_char(week,'YYYY-IW') as week,store,city,zone,branch,product,barcodes,
+    orders,users,quantity_requested,quantity_found,foundrate,sales,average_ticket
+from 
     (select * from
         (select *, sum(p.sales) over (partition by p.cpg order by p.quantity_requested desc)/(select sum(sales) from pivot) as cumsum
         from pivot p
         ) a
-    where cumsum < 0.8
+    where cumsum < 0.5
     order by foundrate
-    limit 100
+    limit 50
     ) b
 order by cumsum;
