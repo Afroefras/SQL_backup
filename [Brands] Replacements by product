@@ -1,0 +1,27 @@
+select
+    p.id as original_product_id,
+    concat(p.name, ' ', p.package) as original_product,
+    ora.product_alternative_id as alternative_product_id,
+    concat(ora.name, ' ', ora.package) as  alternative_product,
+    count(distinct o.id) as orders,
+    count(distinct o.user_id) as users
+from orders_orderproduct op
+    join catalog_product p on op.product_id = p.id
+    join orders_order o on o.id = op.order_id
+    join catalog_storebranch sb on sb.id = o.store_branch_id
+    join orders_orderreplacementalternativeprocess orap on orap.order_id = o.id
+    join orders_orderreplacementalternative ora on ora.process_id = orap.id and ora.item_id = op.id
+    join orders_orderreplacementalternativeselection ors on ors.selection_id = ora.id 
+where 1=1
+    and sb.store_id = 22
+    and p.id = 3137891
+    and op.quantity_found = 0
+    and o.actual_delivery_time >= {{desde}} - interval '1 day' 
+    and o.actual_delivery_time < {{hasta}} + interval '2 day'
+    and o.actual_delivery_time at time zone 'America/Mexico_City' >= {{desde}} 
+    and o.actual_delivery_time at time zone 'America/Mexico_City' < {{hasta}} + interval '1 day'
+    and o.currency = 'MXN'
+    and o.status = 'DELIVERED'
+    and o.order_kind = 'NORMAL'
+group by 1,2,3,4
+order by orders desc;
