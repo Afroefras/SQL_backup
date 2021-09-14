@@ -1,0 +1,30 @@
+select 
+    date_trunc('month', o.actual_delivery_time at time zone sb.timezone) as month,
+    concat(coalesce(sc.old_sampling_id::text, 'without_old_id'), ' - ', sc.name) as sampling_campaign,
+    concat(p.id, ' - ', p.name) as product,
+    concat(b.id, ' - ', b.name) as brand,
+    string_agg(distinct cpg.name, ', ') as cpg,
+    sum(sc.shopper_commission_amount)/count(distinct cpg.id) as shopper_commission,
+    sum(sd.delivered_quantity)/count(distinct cpg.id) as products_delivered
+from inventory_sampling_campaigndelivery sd
+    join inventory_sampling_campaign sc on sc.uuid = sd.campaign_uuid
+    join inventory_sampling_campaignsamplecomposition csc on csc.campaign_uuid = sc.uuid
+    join inventory_sampling_sampleproduct sp on sp.uuid = csc.sample_product_uuid
+    join catalog_product p on p.uuid = sp.product_uuid
+    join catalog_brand b on b.id = p.brand_id
+    join brandcenter_brandcentercpg_brands bcpg on bcpg.brand_id = b.id 
+    join brandcenter_brandcentercpg cpg on cpg.id = bcpg.brandcentercpg_id
+    join orders_order o on o.uuid = sd.order_uuid
+    join catalog_storebranch sb on o.shopper_store_branch_id = sb.id
+    join geo_city gc on sb.city_id = gc.id
+where 1=1
+    and o.actual_delivery_time >= {{from}} - interval '1 day'
+    and o.actual_delivery_time < {{until}} + interval '2 day'
+    and o.actual_delivery_time at time zone sb.timezone >= {{from}}
+    and o.actual_delivery_time at time zone sb.timezone < {{until}} + interval '1 day'
+    and o.status = 'DELIVERED'
+    and sd.status = 'DELIVERED'
+    and gc.country_id = 'MX'
+    and cpg.country_id = 'MX'
+group by 1,2,3,4
+order by products_delivered desc;
