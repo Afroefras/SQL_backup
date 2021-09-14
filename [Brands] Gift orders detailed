@@ -1,0 +1,22 @@
+select 
+    date_trunc('day', o.actual_delivery_time at time zone 'America/Mexico_City') as date,
+    s.name as store,
+    o.order_kind,
+    o.id as order_id,
+    o.external_id,
+    o.qty_products_ordered,
+    o.qty_products_found,
+    o.qty_products_replaced,
+    o.total_receipt
+from orders_order o
+    join catalog_storebranch sb on sb.id = o.store_branch_id
+    join catalog_store s on s.id = sb.store_id
+where 1=1
+    and s.id = 22
+    and o.order_kind = 'GIFT_ORDER'
+    and o.actual_delivery_time >= {{desde}} - interval '1 day' 
+    and o.actual_delivery_time < {{hasta}} + interval '2 day'
+    and o.actual_delivery_time at time zone 'America/Mexico_City' >= {{desde}} 
+    and o.actual_delivery_time at time zone 'America/Mexico_City' < {{hasta}} + interval '1 day'
+    and o.currency = 'MXN'
+    and o.status = 'DELIVERED'
