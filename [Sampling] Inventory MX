@@ -1,0 +1,44 @@
+select 
+    now() at time zone 'America/Mexico_City' as capture_date,
+    concat(coalesce(sc.old_sampling_id::text, 'without_old_id'), ' - ', sc.name) as sampling_campaign,
+    sc.is_active,
+    concat(sc.starts_at, ' to ', sc.ends_at) as dates,
+    sc.extra_filters->'TOP_SHOPPER' as top_shopper,
+    sc.extra_filters->'NEW_CUSTOMER' as new_customer,
+    sc.extra_filters->'POP_CUSTOMER' as pop_customer,
+    sc.max_customer_allowed_quantity,
+    concat(p.id, ' - ', p.name) as product,
+    coalesce(a.owner_class, a.aux) as owner,
+    a.city,
+    sum(a.quantity) as quantity 
+from
+    (select
+        sc.uuid as campaign_uuid,
+        gc.name as city,
+        o.owner_class,
+        (string_to_array(o.description,' '))[1] as aux,
+        sum(i.quantity) as quantity
+    from inventory_sampling_campaign sc 
+        join inventory_sampling_campaignsamplecomposition cc on cc.campaign_uuid = sc.uuid
+        join inventory_sampling_sampleproduct sp on sp.uuid = cc.sample_product_uuid
+        join catalog_product p on p.uuid = sp.product_uuid
+        join inventory_inventoryasset a on a.asset_id = sc.old_sampling_id
+        join inventory_inventorysummary i on i.asset_id = a.id
+        join inventory_inventoryowner o on o.id = i.owner_id
+        join geo_city gc on gc.id = o.owner_city_id
+    where 1=1
+        and p.currency = 'MXN'
+        and gc.country_id = 'MX'
+        and sc.is_active
+        [[and sc.old_sampling_id in ({{sampling_id}})]]
+        [[and p.id in ({{product_id}})]]
+        [[and p.brand_id in ({{brand_id}})]]
+        [[and p.category_id in ({{category_id}})]]
+    group by 1,2,3,4
+    ) a
+    
+    join inventory_sampling_campaign sc on sc.uuid = a.campaign_uuid
+    join inventory_sampling_campaignsamplecomposition csc on csc.campaign_uuid = sc.uuid
+    join inventory_sampling_sampleproduct sp on sp.uuid = csc.sample_product_uuid
+    join catalog_product p on p.uuid = sp.product_uuid
+group by 1,2,3,4,5,6,7,8,9,10,11;
