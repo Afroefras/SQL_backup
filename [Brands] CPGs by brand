@@ -1,0 +1,14 @@
+select
+    b.id as brand_id,
+    b.name as brand,
+    string_agg(distinct cpg.name, ', ') as cpg_names,
+    count(distinct p.id) as products
+from catalog_product p
+    join catalog_brand b on b.id = p.brand_id
+    join brandcenter_brandcentercpg_brands bcpg on bcpg.brand_id = b.id
+    join brandcenter_brandcentercpg cpg on cpg.id = bcpg.brandcentercpg_id
+where 1=1
+    and cpg.country_id = 'MX'
+    and cpg.name not ilike '%no%usar%'
+    and p.is_active
+group by 1,2;
