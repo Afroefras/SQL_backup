@@ -1,0 +1,8 @@
+select count(distinct m.user_uuid) as members
+from loyalty_planmembership m 
+    join loyalty_plan p on p.uuid = m.plan_uuid
+where 1=1
+    and p.uuid = '38d82ad3-e9fb-4857-bbc7-72ffb327af4a'
+    and m.expires_at is null
+    and m.ended_at is null
+    and m.canceled_at is null;
