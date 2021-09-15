@@ -1,0 +1,12 @@
+select 
+    to_char(m.created_at at time zone 'America/Mexico_City', 'YYYY-MM') as month,
+    case when right(left(m.identifier, 8),2) = '12' then 'Virtual' else 'Físicos o Payback' end as membership_type,
+    count(distinct m.uuid) as memberships
+from loyalty_planmembership m
+    join loyalty_plan p on p.uuid = m.plan_uuid
+where 1=1
+    and p.uuid = '38d82ad3-e9fb-4857-bbc7-72ffb327af4a'
+    and m.expires_at is null
+    and m.ended_at is null
+    and m.canceled_at is null
+group by 1,2;
