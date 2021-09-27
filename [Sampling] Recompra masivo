@@ -15,35 +15,38 @@ with product_filter as
     where 1=1
         [[and p.id in ({{product_id}})]]
         [[and b.id in ({{brand_id}})]]
+        [[and c.id in ({{category_id}})]]
         and p.currency={{currency}}
         and cl.language='en'
     ),
         
     campaign_info as 
     (select
-        (o.actual_delivery_time)::date as received_at,  
-        sd.user_id,
+        (o.actual_delivery_time at time zone sb.timezone)::date as received_at,
+        o.user_id,
         o.id as order_id,
-        sd.campaign_id,
+        sc.old_sampling_id,
+        sc.uuid as campaign_uuid,
         sc.name as sampling_campaign,
-        ROW_NUMBER () OVER (PARTITION BY o.user_id ORDER BY order_id) as order_rank
-	from sampling_samplingdelivery sd
-	    join sampling_samplingcampaign sc on sc.id = sd.campaign_id
-	    join orders_order o on o.id = sd.order_id
+        row_number () over (partition by o.user_id order by o.id) as order_rank
+	from inventory_sampling_campaigndelivery sd
+	    join inventory_sampling_campaign sc on sc.uuid = sd.campaign_uuid
+	    join orders_order o on o.uuid = sd.order_uuid
 	    join catalog_storebranch sb on sb.id = o.shopper_store_branch_id
 	where 1=1
-	    [[and sd.campaign_id in ({{campaign_id}})]]
-	    and o.currency = {{currency}}
-	    and o.status = 'DELIVERED'
-	    and sd.status = 'DELIVERED'
+	    [[and sc.old_sampling_id in ({{campaign_id}})]]
+	    [[and sc.uuid::text = {{campaign_uid}}::text]]
         [[and o.actual_delivery_time >= {{sampling_from}} - interval '1 day']] 
         [[and o.actual_delivery_time < {{sampling_until}} + interval '2 day']]
         [[and o.actual_delivery_time at time zone sb.timezone between {{sampling_from}} and {{sampling_until}} + interval '1 day']]
+	    and o.currency = {{currency}}
+	    and o.status = 'DELIVERED'
+	    and sd.status = 'DELIVERED'
 	),
 	    
 	target_users as 
 	(select
-		(o.actual_delivery_time)::date resale_at,
+		(o.actual_delivery_time at time zone sb.timezone)::date resale_at,
         o.id as order_id, 
 		o.user_id,
 		op.product_id,
@@ -51,17 +54,19 @@ with product_filter as
 		sum(op.quantity_found) as found,
 		coalesce(sum(op.quantity_found*op.branch_price), 0)::numeric as sales
 	from orders_orderproduct op
-	    join product_filter pf on pf.product_id = op.product_id
 		join orders_order o on o.id = op.order_id
 		join campaign_info ci on ci.user_id = o.user_id
+	    join product_filter pf on pf.product_id = op.product_id
+		join catalog_storebranch sb on sb.id = o.shopper_store_branch_id
 	where 1=1
 		--se compró después de recibir el sampling
-		and (o.actual_delivery_time)::date > ci.received_at
+		--and (o.actual_delivery_time)::date > ci.received_at
 		--se compró a lo más N días después de recibir el sampling
 		and (o.actual_delivery_time)::date < ci.received_at + interval '30 days'
-		[[and o.actual_delivery_time >= {{repurchase_from}} - interval '1 day']] 
+		and o.actual_delivery_time >= {{repurchase_from}} - interval '1 day' 
         [[and o.actual_delivery_time < {{repurchase_until}} + interval '2 day']]
-        [[and o.actual_delivery_time at time zone sb.timezone between {{repurchase_from}} and {{repurchase_until}} + interval '1 day']]
+        and o.actual_delivery_time at time zone sb.timezone >= {{repurchase_from}}
+        [[and o.actual_delivery_time at time zone sb.timezone < {{repurchase_until}} + interval '1 day']]
 	    and ci.order_rank = 1
 		and o.currency = {{currency}}
 	    and o.status = 'DELIVERED'
@@ -70,7 +75,8 @@ with product_filter as
     )
 
 select 
-    ci.campaign_id,
+    ci.old_sampling_id,
+    ci.campaign_uuid,
     ci.sampling_campaign,
     pf.category_name,
     tot.sampling_users,
@@ -85,12 +91,12 @@ from target_users tu
     join campaign_info ci on ci.user_id = tu.user_id
     join 
         (select
-            campaign_id, 
+            campaign_uuid, 
             count(distinct user_id) as sampling_users 
         from campaign_info
         group by 1
-        ) tot on tot.campaign_id = ci.campaign_id
+        ) tot on tot.campaign_uuid = ci.campaign_uuid
         
 where pf.name is not null
-group by 1,2,3,4,product_name_package
+group by 1,2,3,4,5,product_name_package
 order by repurchase_users desc,items_p_order desc;
