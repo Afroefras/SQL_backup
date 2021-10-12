@@ -5,6 +5,7 @@ with pivot as
         c.id as category_id,
         cl.name as category_name,
         c.name as category_name_es,
+        count(distinct b.id) as brands_in_category,
         count(distinct p.id) as products_in_category
     from catalog_product p 
         join catalog_brand b on b.id = p.brand_id 
@@ -16,6 +17,8 @@ with pivot as
     where 1=1
         and p.currency = 'MXN'
         and cpg.country_id = 'MX'
+        [[and b.id = {{brand_id}}]]
+        [[and b.name ilike concat('%',{{brand_name}},'%')]]
         [[and cpg.id = {{cpg_id}}]]
         [[and cpg.name ilike concat('%',{{cpg_name}},'%')]]
         and cl.language = 'en'
@@ -23,5 +26,5 @@ with pivot as
     ) 
 
 select * from
-    (select *, sum(products_in_category) over (partition by cpg_id order by products_in_category desc)/(select sum(products_in_category) from pivot) as cumsum from pivot) a
-where cumsum <= {{upper_bound}}
+    (select *, sum(products_in_category) over (partition by cpg_id order by products_in_category desc)*100/(select sum(products_in_category) from pivot) cumsum from pivot) a
+where cumsum <= {{acum}} and products_in_category >= {{n_products}}
