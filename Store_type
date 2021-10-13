@@ -1,0 +1,10 @@
+select
+    coalesce(s.id, 0) as store_id,
+    coalesce(s.name, 'unknown_store') as store,
+    case when sc.id <> 13 and s.is_longtail=false then 'Key account'
+        when sc.id = 13 and s.is_longtail=false then 'Groceries' else 'Self-service' end as store_type
+from catalog_store s
+    left join catalog_storecollectionitem sci on sci.store_id = s.id
+    left join catalog_storecollection sc on sc.id = sci.collection_id
+where s.country = 'MX'
+order by 1;
