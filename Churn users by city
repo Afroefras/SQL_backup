@@ -1,0 +1,11 @@
+select 
+    u.uuid as user_uuid,
+    gc.name as city,
+    u.email as email,
+    date_trunc('day',u.date_last_order) as last_order
+from crm_users_view u
+    join geo_city gc on gc.id = u.inferred_city_id
+where 1=1
+    and gc.country_id = 'MX'
+    and gc.id !=2
+    and u.date_last_order between '2020-07-01' and '2020-10-31'
