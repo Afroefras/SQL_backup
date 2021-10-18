@@ -1,0 +1,24 @@
+select
+    concat(p.id, ' - ', p.name) as project,
+    concat(c.id, ' - ', c.name) as campaign,
+    concat(gc.id, ' - ', gc.name) as city,
+    concat(goz.id, ' - ', goz.name) as zone,
+    u.id as user_id,
+    u.email,
+    count(distinct o.id) as orders
+from promotions_promotionalproject p
+    join promotions_promotionalprojectcomponent pc on pc.promotional_project_id = p.id
+    join promotions_campaign c on c.id = pc.component_id
+    join promotions_ordercampaign oc on oc.campaign_id = c.id
+    join orders_order o on o.id = oc.order_id
+    join crm_users_view u on u.id = o.user_id
+    join catalog_storebranch sb on sb.id = o.store_branch_id
+    join geo_city gc on gc.id = sb.city_id
+    join geo_opzone goz on ST_Intersects(goz.multi_poly, sb.picking_point) and not goz.deleted
+where 1=1
+    [[and p.id in ({{project_id}})]]
+    [[and c.id in ({{campaign_id}})]]
+    [[and gc.id in ({{city_id}})]]
+    and gc.country_id = 'MX'
+group by 1,2,3,4,5,6
+order by orders desc;
