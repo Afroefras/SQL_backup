@@ -1,0 +1,18 @@
+select *, uber_orders*1.00/orders as uber_share from
+    (select 
+        gc.name as city,
+        count(distinct o.id) as orders,
+        count(distinct o.id) filter (where o.platform = 0 and (o.client_bundle like '%uber%' or (o.client_bundle is null and u.tmp_uber_original_segmentation = 'Uber'))) as uber_orders
+    from orders_order o
+        join catalog_storebranch sb on sb.id = o.store_branch_id
+        join catalog_store s on s.id = sb.store_id
+        join geo_city gc on gc.id = sb.city_id and gc.country_id = 'MX'
+        join crm_users_view u on u.id = o.user_id
+    where 1=1
+        and o.actual_delivery_time >= '2021-09-01'
+        and o.actual_delivery_time < '2021-09-30'
+        and o.currency = 'MXN'
+        and o.status = 'DELIVERED'
+        and o.order_kind = 'NORMAL'
+    group by 1
+    )a ;
