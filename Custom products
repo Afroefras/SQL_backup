@@ -1,0 +1,26 @@
+select
+    gc.name as city,
+    gz.name as zone,
+    s.id as store_id,
+    s.name as store,
+    sb.id as store_branch_id,
+    sb.name as branch,
+    o.actual_delivery_time at time zone sb.timezone,
+    op.custom_request
+from orders_orderproduct op
+    join orders_order o on o.id = op.order_id
+    join catalog_storebranch sb on sb.id = o.store_branch_id
+    join catalog_store s on s.id = sb.store_id
+    join geo_city gc on gc.id = sb.city_id
+    left join geo_opzone gz on ST_Intersects(gz.multi_poly, sb.picking_point) and not gz.deleted
+where 1=1
+    and sb.id in (1490,32493)
+    and op.custom_request is not null
+    and op.custom_request <> ''
+    and o.actual_delivery_time >= {{desde}} - interval '1 day' 
+    and o.actual_delivery_time < {{hasta}} + interval '2 day'
+    and o.actual_delivery_time at time zone sb.timezone >= {{desde}} 
+    and o.actual_delivery_time at time zone sb.timezone < {{hasta}} + interval '1 day'
+    and o.currency = 'MXN'
+    and o.status = 'DELIVERED'
+    and o.order_kind = 'NORMAL'
