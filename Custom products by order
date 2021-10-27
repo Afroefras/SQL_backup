@@ -1,0 +1,10 @@
+select o.external_id, ooc.description
+from catalog_storebranch cs 
+    join orders_order o on cs.id = o.shopper_store_branch_id
+    join orders_ordercustomproduct ooc on o.id = ooc.order_id
+where o.store_branch_id = 1490
+    and o.shopper_store_branch_id = 1490 --Aca establecemos que la orden tanto fue creada como pickeadda en EFC // Cambiar ambos ID's a 32493 para EFC Qro
+    and o.promised_delivery_time between '2021 10 17' and '2021 10 26' 
+    and o.promised_delivery_time at time zone cs.timezone between '2021 10 18' and '2021 10 25'
+    and o.order_kind = 'NORMAL'
+group by 1,2;
