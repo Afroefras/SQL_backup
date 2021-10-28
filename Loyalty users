@@ -1,17 +1,36 @@
-select 
-    distinct u.uuid,
-    u.first_name,
-    u.last_name,
-    u.email,
-    u.phone_number,
-    gc.name as city,
-    coalesce(p.name,'None') as loyalty_plan_name,
-    m.uuid as membership_uuid,
-    m.created_at
-from crm_users_view u
-    left join geo_city gc on gc.id = u.inferred_city_id
-    left join loyalty_planmembership m on m.user_uuid = u.uuid
-    left join loyalty_plan p on p.uuid = m.plan_uuid
-where u.email in (
-    'info@viajaratugusto.com'
+with users as (
+    select 
+        distinct u.uuid as user_uuid,
+        u.first_name,
+        u.last_name,
+        u.email,
+        u.phone_number,
+        gc.name as city,
+        coalesce(p.name,'None') as loyalty_plan_name,
+        m.uuid as membership_uuid,
+        m.created_at
+    from crm_users_view u
+        left join geo_city gc on gc.id = u.inferred_city_id
+        left join loyalty_planmembership m on m.user_uuid = u.uuid
+        left join loyalty_plan p on p.uuid = m.plan_uuid
+    where 1=1
+        and u.email in (
+            'jsalher82@outlook.com',
+            'bory163@gmail.com'
+            )
+        and (p.uuid is null or p.uuid = '78aad4e8-955c-40c4-a62f-696acace85b0')
+        and coalesce(m.expires_at, coalesce(ended_at, coalesce(canceled_at, current_date + interval '1 day'))) >= current_date
+        and coalesce(m.created_at, current_date - interval '1 day') <= current_date
+    group by 1,2,3,4,5,6,7,8,9
     )
+    
+select u.*, sum(to_count.memberships) as memberships
+from users u
+    join 
+        (select
+            user_uuid,
+            count(distinct membership_uuid) as memberships
+        from users group by 1
+        ) to_count on to_count.user_uuid=u.user_uuid
+group by 1,2,3,4,5,6,7,8,9
+order by loyalty_plan_name, memberships desc, created_at desc;
