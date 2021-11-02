@@ -17,14 +17,14 @@ from
         and o.currency = 'MXN'
         and o.status = 'DELIVERED'
         and o.order_kind = 'NORMAL'
-    limit 3
     ) owp
     
     join orders_order o on o.id = owp.order_id
     join orders_orderproduct op on op.order_id = o.id
-    left join catalog_product p_aux on p_aux.id = owp.product_id
+    join catalog_product p_aux on p_aux.id = owp.product_id
     join catalog_product p on p.id = op.product_id
     left join catalog_category c on c.id = p.category_id
 where p.id <> owp.product_id
 group by 1,2
-order by orders desc;
+order by orders desc
+limit 20;
