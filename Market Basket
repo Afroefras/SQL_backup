@@ -1,0 +1,30 @@
+select
+    concat(p_aux.id, ' - ', p_aux.name, ' ', p_aux.package) as product_of_interest,
+    concat(c.id, ' - ', c.name) as category_taken_with,
+    count(distinct o.id) as orders
+from 
+    (select
+        distinct o.id as order_id, 
+        op.product_id
+    from orders_orderproduct op 
+        join orders_order o on  o.id = op.order_id
+    where 1=1
+        [[and op.product_id = {{product_id}}]]
+        and o.actual_delivery_time >= {{desde}} - interval '1 day' 
+        and o.actual_delivery_time < {{hasta}} + interval '2 day'
+        and o.actual_delivery_time at time zone 'America/Mexico_City' >= {{desde}} 
+        and o.actual_delivery_time at time zone 'America/Mexico_City' < {{hasta}} + interval '1 day'
+        and o.currency = 'MXN'
+        and o.status = 'DELIVERED'
+        and o.order_kind = 'NORMAL'
+    limit 3
+    ) owp
+    
+    join orders_order o on o.id = owp.order_id
+    join orders_orderproduct op on op.order_id = o.id
+    left join catalog_product p_aux on p_aux.id = owp.product_id
+    join catalog_product p on p.id = op.product_id
+    left join catalog_category c on c.id = p.category_id
+where p.id <> owp.product_id
+group by 1,2
+order by orders desc;
