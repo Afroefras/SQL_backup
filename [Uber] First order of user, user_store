@@ -1,14 +1,14 @@
-select 
+select *, store_and_user_first_orders - user_first_orders as just_store_first_order from
+(select 
     concat(s.id, ' - ', s.name) as store,
     concat(gc.id, ' - ', gc.name) as city,
-    case when o.platform = 0 and (o.client_bundle like '%uber%' or (o.client_bundle is null and u.tmp_uber_original_segmentation = 'Uber')) then 'Uber'
-        else 'Cornershop' end as platform,
-    count(distinct o.id) as orders,
-    count(distinct o.id) filter (where date_trunc('day', o.actual_delivery_time) = date_trunc('day', coalesce(u.date_first_order, u.created))) as user_first_orders,
-    least(1,count(1) filter (where date_trunc('day', o.actual_delivery_time) = fso.store_first_order)) as store_first_orders,
-    count(distinct o.id) filter (where o.total_receipt > 1000) as orders_greater_than_1K,
+    case when o.platform = 0 and (o.client_bundle like '%uber%' or (o.client_bundle is null and u.tmp_uber_original_segmentation = 'Uber')) then 'Uber' else 'Cornershop' end as platform,
     sum(o.total_receipt) as sales,
-    sum(o.qty_products_found + o.qty_products_replaced) as products_delivered
+    sum(o.qty_products_found + o.qty_products_replaced) as products_delivered,
+    count(distinct o.id) as orders,
+    count(distinct o.id) filter (where o.total_receipt > 1000) as orders_greater_than_1K,
+    count(distinct o.id) filter (where date_trunc('day', o.actual_delivery_time) = date_trunc('day', coalesce(u.date_first_order, u.created))) as user_first_orders,
+    count(distinct date_trunc('day', o.actual_delivery_time)) filter (where date_trunc('day', o.actual_delivery_time) = fso.store_first_order) as store_and_user_first_orders
 from orders_order o
     join catalog_storebranch sb on sb.id = o.store_branch_id
     join catalog_store s on s.id = sb.store_id
@@ -35,4 +35,4 @@ where 1=1
     and o.currency = 'MXN'
     and o.status = 'DELIVERED'
     and o.order_kind = 'NORMAL'
-group by 1,2,3;
+group by 1,2,3) a;
