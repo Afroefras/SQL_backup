@@ -5,7 +5,7 @@ select
         else 'Cornershop' end as platform,
     count(distinct o.id) as orders,
     count(distinct o.id) filter (where date_trunc('day', o.actual_delivery_time) = date_trunc('day', coalesce(u.date_first_order, u.created))) as user_first_orders,
-    count(distinct o.id) filter (where date_trunc('day', o.actual_delivery_time) = fso.store_first_order) as store_first_orders,
+    least(1,count(1) filter (where date_trunc('day', o.actual_delivery_time) = fso.store_first_order)) as store_first_orders,
     count(distinct o.id) filter (where o.total_receipt > 1000) as orders_greater_than_1K,
     sum(o.total_receipt) as sales,
     sum(o.qty_products_found + o.qty_products_replaced) as products_delivered
@@ -21,7 +21,7 @@ from orders_order o
         from orders_order o 
             join catalog_storebranch sb on sb.id = o.store_branch_id
         where 1=1
-            and sb.store_id = 146
+            and sb.store_id = 3730
             and o.currency = 'MXN'
             and o.status = 'DELIVERED'
             and o.order_kind = 'NORMAL'
@@ -29,12 +29,10 @@ from orders_order o
         ) fso on fso.user_id = u.id
         
 where 1=1
-    and s.id = 146
-    and o.actual_delivery_time >= '2021-09-22'
-    and o.actual_delivery_time <= '2021-09-30'
+    and s.id = 3730
+    and o.actual_delivery_time >= '2021-10-01'
+    and o.actual_delivery_time <= '2021-10-31'
     and o.currency = 'MXN'
     and o.status = 'DELIVERED'
     and o.order_kind = 'NORMAL'
-group by 1,2,3
-
-limit 2;
+group by 1,2,3;
