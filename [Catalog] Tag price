@@ -1,13 +1,12 @@
 select 
+    distinct on (o.id)
     concat(s.id, ' - ', s.name) as store,
     concat(sb.id, ' - ', sb.name) as branch,
     p.id as product_id,
     concat(p.name, ' ', p.package) as product,
     p.barcodes,
-    count(distinct o.id) as orders,
-    min(op.tag_price) as min_tag_price,
-    max(op.tag_price) as max_tag_price,
-    avg(op.tag_price) as avg_tag_price
+    op.cornershop_price as price_shown,
+    op.branch_price as supply_price
 from orders_orderproduct op
     join catalog_product p on p.id = op.product_id
     join orders_order o on o.id = op.order_id
@@ -26,5 +25,4 @@ where 1=1
     and o.currency = 'MXN'
     and o.status = 'DELIVERED'
     and o.order_kind = 'NORMAL'
-group by 1,2,3,4,5
-order by orders desc
+order by o.id desc;
