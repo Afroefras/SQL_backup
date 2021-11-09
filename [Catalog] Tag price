@@ -1,0 +1,30 @@
+select 
+    concat(s.id, ' - ', s.name) as store,
+    concat(sb.id, ' - ', sb.name) as branch,
+    p.id as product_id,
+    concat(p.name, ' ', p.package) as product,
+    p.barcodes,
+    count(distinct o.id) as orders,
+    min(op.tag_price) as min_tag_price,
+    max(op.tag_price) as max_tag_price,
+    avg(op.tag_price) as avg_tag_price
+from orders_orderproduct op
+    join catalog_product p on p.id = op.product_id
+    join orders_order o on o.id = op.order_id
+    join catalog_storebranch sb on sb.id = o.store_branch_id
+    join catalog_store s on s.id = sb.store_id
+where 1=1
+    /*and p.id in 
+        (
+        
+        )*/
+    and sb.id in (1490, 621, 201, 202, 3986, 32493, 3219, 392)
+    and o.actual_delivery_time >= {{desde}} - interval '1 day' 
+    and o.actual_delivery_time < {{hasta}} + interval '2 day'
+    and o.actual_delivery_time at time zone 'America/Mexico_City' >= {{desde}} 
+    and o.actual_delivery_time at time zone 'America/Mexico_City' < {{hasta}} + interval '1 day'
+    and o.currency = 'MXN'
+    and o.status = 'DELIVERED'
+    and o.order_kind = 'NORMAL'
+group by 1,2,3,4,5
+order by orders desc
