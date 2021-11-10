@@ -1,13 +1,16 @@
 select 
-    distinct on (p.catalog_product_id, sb.catalog_store_branch_id)
-    s.sku_source,
-    p.catalog_product_id,
-    p.name,
-    p.sku,
-    p.price
-from supply_product p
-    join supply_storeinfo s on s.sku_source = p.sku_source
-    join supply_storebranch sb on s.store_id = sb.store_id
+    concat(ss.store_id, ' - ', sp.sku_source) as store,
+    sp.catalog_product_id,
+    sp.name,
+    spb.branch::numeric as branch,
+    spb.price,
+    min(spb.last_visited) as min_last_visit
+from supply_product sp
+    join supply_productbranch spb on sp.id = spb.product_id
+    join supply_storeinfo ss on ss.sku_source = sp.sku_source
 where 1=1
-    and p.catalog_product_id = 196329
-    and sb.catalog_store_branch_id in (1490, 621, 201, 202, 3986, 32493, 3219, 392)
+    and ss.store_id in (9,25) 
+    and spb.branch in ('1490', '621', '201', '202', '3986', '32493', '3219', '392')
+    and sp.catalog_product_id = 196329 
+    and spb.last_visited > now()::date - interval '2 days' 
+group by 1,2,3,4,5
