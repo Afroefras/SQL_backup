@@ -1,0 +1,9 @@
+select * from 
+    (select unnest(p.barcodes) as barcodes, p.id as product_id 
+    from catalog_product p where p.is_active and p.currency = 'MXN'
+    ) as a
+where barcodes in (
+'7506425625710',
+'7506425625734',
+'7506425625758'
+)
