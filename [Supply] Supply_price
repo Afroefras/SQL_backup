@@ -1,0 +1,13 @@
+select 
+    distinct on (p.catalog_product_id, sb.catalog_store_branch_id)
+    s.sku_source,
+    p.catalog_product_id,
+    p.name,
+    p.sku,
+    p.price
+from supply_product p
+    join supply_storeinfo s on s.sku_source = p.sku_source
+    join supply_storebranch sb on s.store_id = sb.store_id
+where 1=1
+    and p.catalog_product_id = 196329
+    and sb.catalog_store_branch_id in (1490, 621, 201, 202, 3986, 32493, 3219, 392)
