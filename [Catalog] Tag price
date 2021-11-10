@@ -1,5 +1,5 @@
 select 
-    distinct on (o.id)
+    distinct on (pb.id)
     concat(s.id, ' - ', s.name) as store,
     concat(sb.id, ' - ', sb.name) as branch,
     p.id as product_id,
@@ -11,12 +11,13 @@ from orders_orderproduct op
     join catalog_product p on p.id = op.product_id
     join orders_order o on o.id = op.order_id
     join catalog_storebranch sb on sb.id = o.store_branch_id
+    join catalog_productbranch pb on pb.product_id = p.id and pb.branch_id = sb.id
     join catalog_store s on s.id = sb.store_id
 where 1=1
-    /*and p.id in 
+    and p.id in 
         (
-        
-        )*/
+        129959
+        )
     and sb.id in (1490, 621, 201, 202, 3986, 32493, 3219, 392)
     and o.actual_delivery_time >= {{desde}} - interval '1 day' 
     and o.actual_delivery_time < {{hasta}} + interval '2 day'
@@ -25,4 +26,4 @@ where 1=1
     and o.currency = 'MXN'
     and o.status = 'DELIVERED'
     and o.order_kind = 'NORMAL'
-order by o.id desc;
+order by pb.id desc;
