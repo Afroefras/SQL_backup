@@ -1,6 +1,7 @@
 select 
     concat(ss.store_id, ' - ', sp.sku_source) as store,
     sp.catalog_product_id,
+    b.barcode,
     sp.name,
     spb.branch::numeric as branch,
     spb.price,
@@ -8,9 +9,13 @@ select
 from supply_product sp
     join supply_productbranch spb on sp.id = spb.product_id
     join supply_storeinfo ss on ss.sku_source = sp.sku_source
+    join supply_productbarcode b on b.product_id = sp.id
 where 1=1
     and ss.store_id in (9,25) 
     and spb.branch in ('1490', '621', '201', '202', '3986', '32493', '3219', '392')
-    and sp.catalog_product_id = 196329 
+    and sp.catalog_product_id in
+        (
+1990378
+        )
     and spb.last_visited > now()::date - interval '2 days' 
-group by 1,2,3,4,5
+group by 1,2,3,4,5,6
