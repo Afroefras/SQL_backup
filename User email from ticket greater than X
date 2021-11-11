@@ -1,8 +1,9 @@
 select 
-    distinct u.uuid,
+    distinct u.uuid as user_uuid,
     u.email,
-    u.phone_number,
-    concat(gc.code, ' - ', gc.name) as city,
+    /*u.phone_number,
+    concat(s.id, ' - ', s.name) as store,
+    concat(gc.code, ' - ', gc.name) as city,*/
     count(distinct o.id) as orders,
     avg(o.total_receipt) as avg_receipt
 from orders_order o
@@ -13,14 +14,15 @@ from orders_order o
 where 1=1
     [[and gc.id in ({{city_id}})]]
     [[and s.id in ({{store_id}})]]
-    [[and o.total_receipt > {{greater_than}}]]
+    [[and o.total_receipt > {{receipt_greater_than}}]]
     and o.actual_delivery_time >= {{desde}} - interval '1 day' 
     and o.actual_delivery_time < {{hasta}} + interval '2 day'
-    and o.actual_delivery_time at time zone 'America/Mexico_City' >= {{desde}} 
-    and o.actual_delivery_time at time zone 'America/Mexico_City' < {{hasta}} + interval '1 day'
+    and o.actual_delivery_time at time zone sb.timezone >= {{desde}} 
+    and o.actual_delivery_time at time zone sb.timezone < {{hasta}} + interval '1 day'
     and o.currency = 'MXN'
     and o.status = 'DELIVERED'
     and o.order_kind = 'NORMAL'
     and u.is_active
-group by 1,2,3,4
+group by 1,2--,3,4,5
+[[having count(distinct o.id) > {{more_than_n_orders}}]]
 order by orders desc;
