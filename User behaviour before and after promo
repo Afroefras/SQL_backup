@@ -1,0 +1,41 @@
+with target_users as(
+    select 
+        distinct user_id,
+        concat(p.id, ' - ', p.name) as project,
+        concat(c.id, ' - ', c.name) as campaign,
+        max(o.actual_delivery_time) as promo_date
+    from promotions_promotionalproject p
+        join promotions_promotionalprojectcomponent pc on pc.promotional_project_id = p.id
+        join promotions_campaign c on c.id = pc.component_id
+        join promotions_ordercampaign oc on oc.campaign_id = c.id
+        join orders_order o on o.id = oc.order_id
+    where 1=1
+        [[and p.id in ({{project_id}})]]
+        [[and c.id in ({{campaign_id}})]]
+    group by 1,2,3
+    )
+    
+select 
+    concat(gc.id, ': ', gc.code, ' - ', gc.name) as city,
+    concat(s.id, ' - ', s.name) as store,
+    count(distinct tu.user_id) as users,
+    count(distinct o.id) filter (where o.actual_delivery_time < tu.promo_date) as orders_before_promo,
+    count(distinct o.id) filter (where o.actual_delivery_time >= tu.promo_date) as orders_after_promo,
+    coalesce(sum(o.total_receipt) filter (where o.actual_delivery_time < tu.promo_date),0) as sales_before_promo,
+    coalesce(sum(o.total_receipt) filter (where o.actual_delivery_time >= tu.promo_date),0) as sales_after_promo
+from orders_order o
+    join target_users tu on tu.user_id = o.user_id
+    join catalog_storebranch sb on sb.id = o.store_branch_id
+    join catalog_store s on s.id = sb.store_id
+    join geo_city gc on gc.id = sb.city_id
+    join orders_orderproduct op on op.order_id = o.id
+    join catalog_product p on p.id = op.product_id
+    left join catalog_brand b on b.id = p.brand_id
+    left join catalog_category c on c.id = p.category_id
+where 1=1
+    [[and gc.id in ({{city_id}})]]
+    [[and s.id in ({{store_id}})]]
+    [[and b.id in ({{brand_id}})]]
+    [[and c.id in ({{category_id}})]]
+    --and gc.country_id = 'MX'
+group by 1,2
