@@ -1,52 +1,63 @@
 select 
-    project, campaign, city, store,
-    count(distinct user_id) filter (where days_from_promo<0 and n_order=1) as before_promo_at_least_once,
-    count(distinct user_id) filter (where days_from_promo<0 and n_order>1) as before_promo_more_than_once,
-    count(distinct user_id) filter (where days_from_promo=0 and n_order=1) as first_order_was_promo,
-    count(distinct user_id) filter (where days_from_promo>0 and n_order>1) as after_promo
-from (select *, row_number() over (partition by user_id order by actual_delivery_time) as n_order from
-    (select 
-        distinct on (o.id) o.id,
-        tu.project,
-        tu.campaign,
-        concat(gc.id, ': ', gc.code, ' - ', gc.name) as city,
-        concat(s.id, ' - ', s.name) as store,
-        tu.promo_order_date,
-        o.user_id,
-        o.actual_delivery_time,
-        extract(epoch from o.actual_delivery_time - tu.promo_order_date)/86400 as days_from_promo
-    from orders_order o
-        join (
-            select 
-                distinct user_id,
-                concat(p.id, ' - ', p.name) as project,
-                concat(c.id, ' - ', c.name) as campaign,
-                max(o.actual_delivery_time) as promo_order_date
-            from promotions_promotionalproject p
-                join promotions_promotionalprojectcomponent pc on pc.promotional_project_id = p.id
-                join promotions_campaign c on c.id = pc.component_id
-                join promotions_ordercampaign oc on oc.campaign_id = c.id
-                join orders_order o on o.id = oc.order_id
+    project, campaign, city, store, user_id,
+    string_agg(distinct user_type, ' - ') as user_type
+from 
+    (select *,
+        case when days_from_promo<0 and n_order=1 then '1. Before promo at least once'
+            when days_from_promo<=0 and n_order>1 then '2. Before promo more than once'
+            when days_from_promo=0 and n_order=1 then '1. First order was promo'
+            when days_from_promo>0 and n_order>1 then '2. Bought after promo' else '0. what?' end as user_type
+    from 
+        (select 
+            *, row_number() over (partition by user_id order by actual_delivery_time) as n_order 
+        from
+            (select 
+                distinct on (o.id) o.id,
+                tu.project,
+                tu.campaign,
+                concat(gc.id, ': ', gc.code, ' - ', gc.name) as city,
+                concat(s.id, ' - ', s.name) as store,
+                tu.promo_order_date,
+                o.user_id,
+                o.actual_delivery_time,
+                extract(epoch from o.actual_delivery_time - tu.promo_order_date)/86400 as days_from_promo
+            from orders_order o
+                join (
+                    select 
+                        distinct user_id,
+                        concat(p.id, ' - ', p.name) as project,
+                        concat(c.id, ' - ', c.name) as campaign,
+                        max(o.actual_delivery_time) as promo_order_date
+                    from promotions_promotionalproject p
+                        join promotions_promotionalprojectcomponent pc on pc.promotional_project_id = p.id
+                        join promotions_campaign c on c.id = pc.component_id
+                        join promotions_ordercampaign oc on oc.campaign_id = c.id
+                        join orders_order o on o.id = oc.order_id
+                    where 1=1
+                        [[and p.id in ({{project_id}})]]
+                        [[and c.id in ({{campaign_id}})]]
+                        and o.currency = 'MXN'
+                        and o.status = 'DELIVERED'
+                        and o.order_kind = 'NORMAL'
+                    group by 1,2,3
+                    ) tu on tu.user_id = o.user_id
+                    
+                join catalog_storebranch sb on sb.id = o.store_branch_id
+                join catalog_store s on s.id = sb.store_id
+                join geo_city gc on gc.id = sb.city_id
+                join orders_orderproduct op on op.order_id = o.id
+                join catalog_product p on p.id = op.product_id
+                left join catalog_brand b on b.id = p.brand_id
+                left join catalog_category c on c.id = p.category_id
             where 1=1
-                [[and p.id in ({{project_id}})]]
-                [[and c.id in ({{campaign_id}})]]
-            group by 1,2,3
-            ) tu on tu.user_id = o.user_id
-            
-        join catalog_storebranch sb on sb.id = o.store_branch_id
-        join catalog_store s on s.id = sb.store_id
-        join geo_city gc on gc.id = sb.city_id
-        join orders_orderproduct op on op.order_id = o.id
-        join catalog_product p on p.id = op.product_id
-        left join catalog_brand b on b.id = p.brand_id
-        left join catalog_category c on c.id = p.category_id
-    where 1=1
-        [[and gc.id in ({{city_id}})]]
-        [[and s.id in ({{store_id}})]]
-        [[and b.id in ({{brand_id}})]]
-        [[and c.id in ({{category_id}})]]
-        and o.currency = 'MXN'
-        and o.status = 'DELIVERED'
-        and o.order_kind = 'NORMAL'
-    )a)b
-group by 1,2,3,4;
+                [[and gc.id in ({{city_id}})]]
+                [[and s.id in ({{store_id}})]]
+                [[and b.id in ({{brand_id}})]]
+                [[and c.id in ({{category_id}})]]
+                and o.currency = 'MXN'
+                and o.status = 'DELIVERED'
+                and o.order_kind = 'NORMAL'
+            )a
+        )b
+    )c
+group by 1,2,3,4,5;
