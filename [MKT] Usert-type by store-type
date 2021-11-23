@@ -1,0 +1,45 @@
+select *,
+    case when nongroceries_orders=0 and groceries_orders=0 and selfservice_orders>0 then 'Non-Groceries only'
+        when nongroceries_orders=0 and groceries_orders>0  and selfservice_orders=0 then 'Supermercados only'
+        when nongroceries_orders>0 and groceries_orders=0  and selfservice_orders=0 then 'Express only'
+        when nongroceries_orders>0 and groceries_orders>0  and selfservice_orders>0 then 'Bought all'
+        when nongroceries_orders>0 and groceries_orders>0  and selfservice_orders=0 then 'Super + Express'
+        when nongroceries_orders=0 and groceries_orders>0  and selfservice_orders>0 then 'Super + Non-Groceries'
+        when nongroceries_orders>0 and groceries_orders=0  and selfservice_orders>0 then 'Express + Non-Groceries'
+        else 'what?' end as user_type
+from
+    (select
+        to_char(order_month, 'YYYY-MM') as month,
+        user_id,
+        count(distinct order_id) filter (where store_type = 'Non-Groceries') as nongroceries_orders,
+        count(distinct order_id) filter (where store_type = 'Groceries') as groceries_orders,
+        count(distinct order_id) filter (where store_type = 'Self-service') as selfservice_orders,
+        coalesce(sum(merchant_payment) filter (where store_type = 'Non-Groceries'), 0) as nongroceries_gmv,
+        coalesce(sum(merchant_payment) filter (where store_type = 'Groceries'), 0) as groceries_gmv,
+        coalesce(sum(merchant_payment) filter (where store_type = 'Self-service'), 0) as selfservice_gmv
+    from
+        (select
+            distinct o.id as order_id,
+            date_trunc('month', o.actual_delivery_time) as order_month,
+            o.user_id,
+            case when sc.id <> 13 and s.is_longtail=false then 'Non-Groceries'
+                when sc.id = 13 and s.is_longtail=false then 'Groceries' else 'Self-service' end as store_type,
+            o.total_receipt as merchant_payment
+        from orders_order o
+            join catalog_storebranch sb on sb.id = o.store_branch_id
+            join catalog_store s on s.id = sb.store_id
+            left join catalog_storecollectionitem sci on sci.store_id = s.id
+            left join catalog_storecollection sc on sc.id = sci.collection_id
+        where 1=1
+            and o.actual_delivery_time >= {{desde}} - interval '2 day'
+            and o.actual_delivery_time < {{hasta}} + interval '2 day'
+            and o.actual_delivery_time at time zone sb.timezone >= {{desde}}
+            and o.actual_delivery_time at time zone sb.timezone < {{hasta}} + interval '1 day'
+            and o.currency = 'MXN'
+            and o.status = 'DELIVERED'
+            and o.order_kind = 'NORMAL'
+            and s.country = 'MX'
+            and s.status = 'ACTIVE'
+        ) a 
+    group by 1,2
+    ) b;
