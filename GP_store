@@ -1,0 +1,85 @@
+select *,
+    revenue - costs_no_ad as gross_profit_no_ad,
+    revenue - (costs_no_ad + ad_revenue_cost) as gross_profit
+from
+    (select *,
+        bags + processing_fees + replacement_calls + shopper_commission + shopper_extra_commission_adj as costs_no_ad,
+        total_cart + sh_paid + pop_subscriptions + partner_commission as revenue
+    from
+        (select 
+            a.*,
+            b.shopper_extra_commission_total* a.shopper_commission / sum(a.shopper_commission) over () as shopper_extra_commission_adj,
+            c.ad_revenue_cost
+        from
+            (select 
+                gc.country_id as country,
+                oa.order_platform,
+                concat(s.id, ' - ', s.name) as store,
+                count(distinct os.order_id) as orders,
+                sum(total_receipt) as merchant_payment,
+                sum(os.total_cart) as total_cart,
+                sum(delivery_charged) filter (where oa.with_subscription= false) as sh_paid,
+                (count(distinct os.user_id) filter (where oa.with_subscription= true))*99 as pop_subscriptions,
+                sum(os.partner_commission) as partner_commission,
+                sum(os.cornershop_bags)*3.9 as bags,
+                sum(os.total_cart)*0.03 as processing_fees,
+                sum(coc.from_call_rate+coc.to_call_rate)*22.3 as replacement_calls,
+                sum(osc.total_commission) as shopper_commission
+            from public.orders_ordersummary os
+                join public.orders_orderattributes oa using (order_id)
+                join catalog_store s on s.id = oa.store_id 
+                join public.geo_city gc on gc.id = os.city_id
+                join orders_shopperscommission osc using (order_id)
+                left join 
+                    (select 
+                        distinct order_id,
+                        sum(from_call_rate) as from_call_rate,
+                        sum(to_call_rate) as  to_call_rate
+                    from calls_ordercalls 
+                    group by 1
+                    ) coc using (order_id)
+                    
+            where 1=1
+                [[and s.id in ({{store_id}})]]
+                and os.actual_delivery_time >= {{desde}} - interval '1 day' 
+                and os.actual_delivery_time < {{hasta}} + interval '2 day'
+                and os.actual_delivery_time at time zone 'America/Mexico_City' >= {{desde}} 
+                and os.actual_delivery_time at time zone 'America/Mexico_City' < {{hasta}} + interval '1 day'
+                and os.country = 'MX'
+                and os.status = 'DELIVERED'
+                and os.order_kind = 'NORMAL'
+            group by 1,2,3
+            ) a
+            
+            join 
+                (select 
+                    country,
+                    sum(amount) as shopper_extra_commission_total
+                from commissions_othercommissions
+                where 1=1
+                    and payment_date >= {{desde}} - interval '1 day' 
+                    and payment_date < {{hasta}} + interval '2 day'
+                    and payment_date at time zone 'America/Mexico_City' >= {{desde}} 
+                    and payment_date at time zone 'America/Mexico_City' < {{hasta}} + interval '1 day'
+                    and country = 'MX'
+                group by 1
+                ) b using(country)
+                
+            join 
+                (select 
+                    os.country,
+                    oa.order_platform,
+                    sum(total_receipt) as ad_revenue_cost
+                from public.orders_ordersummary os
+                    join public.orders_orderattributes oa using (order_id)
+                where 1=1
+                    and os.order_kind = 'GIFT_ORDER'
+                    and os.country = 'MX'
+                    and os.actual_delivery_time >= {{desde}} - interval '1 day' 
+                    and os.actual_delivery_time < {{hasta}} + interval '2 day'
+                    and os.actual_delivery_time at time zone 'America/Mexico_City' >= {{desde}} 
+                    and os.actual_delivery_time at time zone 'America/Mexico_City' < {{hasta}} + interval '1 day'
+                group by 1,2
+                ) c using(country, order_platform)
+        ) d
+    ) e
