@@ -12,10 +12,11 @@ from
         to_char(order_month, 'YYYY-MM') as month,
         u.id as user_id,
         case when date_trunc('month', coalesce(u.date_first_order, u.created)) = order_month then 1 else 0 end as is_new_user,
+        count(distinct order_id) filter (where order_pop) as pop_orders,
+        count(distinct order_id) filter (where order_platform = 'Uber') as uber_orders,
         count(distinct order_id) filter (where store_type = 'Non-Groceries') as nongroceries_orders,
         count(distinct order_id) filter (where store_type = 'Groceries') as groceries_orders,
         count(distinct order_id) filter (where store_type = 'Self-service') as selfservice_orders,
-        count(distinct order_id) filter (where order_platform = 'Uber') as uber_orders,
         coalesce(sum(merchant_payment) filter (where store_type = 'Non-Groceries'), 0) as nongroceries_gmv,
         coalesce(sum(merchant_payment) filter (where store_type = 'Groceries'), 0) as groceries_gmv,
         coalesce(sum(merchant_payment) filter (where store_type = 'Self-service'), 0) as selfservice_gmv
@@ -25,6 +26,7 @@ from
             date_trunc('month', o.actual_delivery_time at time zone sb.timezone) as order_month,
             o.user_id,
             o.total_receipt as merchant_payment,
+            o.with_subscription as order_pop,
             case when o.platform = 0 and (o.client_bundle like '%uber%' or (o.client_bundle is null and u.tmp_uber_original_segmentation = 'Uber')) then 'Uber' else 'Cornershop' end as order_platform,
             case when sc.id <> 13 and s.is_longtail=false then 'Non-Groceries'
                 when sc.id = 13 and s.is_longtail=false then 'Groceries' else 'Self-service' end as store_type
