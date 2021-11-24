@@ -10,7 +10,8 @@ select *,
 from
     (select
         to_char(order_month, 'YYYY-MM') as month,
-        user_id,
+        u.id as user_id,
+        date_trunc('month', coalesce(u.date_first_order, u.created)) = order_month as is_new_user,
         count(distinct order_id) filter (where store_type = 'Non-Groceries') as nongroceries_orders,
         count(distinct order_id) filter (where store_type = 'Groceries') as groceries_orders,
         count(distinct order_id) filter (where store_type = 'Self-service') as selfservice_orders,
@@ -20,7 +21,7 @@ from
     from
         (select
             distinct o.id as order_id,
-            date_trunc('month', o.actual_delivery_time) as order_month,
+            date_trunc('month', o.actual_delivery_time at time zone sb.timezone) as order_month,
             o.user_id,
             case when sc.id <> 13 and s.is_longtail=false then 'Non-Groceries'
                 when sc.id = 13 and s.is_longtail=false then 'Groceries' else 'Self-service' end as store_type,
@@ -41,5 +42,6 @@ from
             and s.country = 'MX'
             and s.status = 'ACTIVE'
         ) a 
-    group by 1,2
+        join crm_users_view u on u.id = a.user_id
+    group by 1,2,3
     ) b;
