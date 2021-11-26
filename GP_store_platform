@@ -1,0 +1,105 @@
+select *,
+    revenue - costs as gross_profit,
+    (revenue - costs)*1.00 / revenue as gross_margin
+from
+    (select order_platform, store,
+        total_cart + sh_paid + pop_subscriptions as gmv,
+        total_cart + sh_paid + pop_subscriptions + partner_commission - (merchant_payment + customer_refunds + credits_refund) as revenue,
+        processing_fees + shopper_commission + replacement_calls + ad_revenue_cost + bags as costs
+    from
+        (select 
+            b.*,
+            coalesce(c.ad_revenue_cost,0) as ad_revenue_cost,
+            coalesce(c.post_sale_refunds,0) as post_sale_refunds,
+            b.refunds_in_cash + coalesce(c.post_sale_refunds,0) as customer_refunds
+        from
+            (select 
+                gc.country_id as country,
+                case when o.platform = 0 and (o.client_bundle like '%uber%' or (o.client_bundle is null and u.tmp_uber_original_segmentation = 'Uber')) then 'Uber' else 'Cornershop' end as order_platform,
+                concat(s.id, ' - ', s.name) as store,
+                count(distinct o.id) as orders,
+                coalesce(sum(o.total_receipt),0) as merchant_payment,
+                coalesce(sum(o.cart_total),0) as total_cart,
+                coalesce(sum(o.delivery_charged) filter (where not o.with_subscription),0) as sh_paid,
+                (count(distinct o.user_id) filter (where o.with_subscription))*99 as pop_subscriptions,
+                coalesce(sum(o.commission*o.total_receipt) ,0) as partner_commission,
+                coalesce(sum(o.bags),0)*3.9 as bags,
+                coalesce(sum(o.cart_total),0)*0.03 as processing_fees,
+                sum(a.total_commission) as shopper_commission,
+                sum(a.from_call_rate + a.to_call_rate)*22.3 as replacement_calls,
+                sum(a.refunds_in_cash) as refunds_in_cash,
+                sum(a.refunds_in_credits) as refunds_in_credits,
+                sum(a.refunds_in_transfer) as refunds_in_transfer,
+                sum(a.credits_refund) as credits_refund
+            from orders_order o
+                join crm_users_view u on u.id = o.user_id
+                join catalog_storebranch sb on sb.id = o.store_branch_id
+                join catalog_store s on s.id = sb.store_id 
+                join geo_city gc on gc.id = sb.city_id
+                left join
+                    (select 
+                        distinct o.id as order_id,
+                        coalesce(sum(shc.amount),0) as total_commission,
+                        coalesce(sum(oc.from_call_rate),0) as from_call_rate,
+                        coalesce(sum(oc.to_call_rate),0) as  to_call_rate,
+                        coalesce(sum(pr.amount) filter (where pr.type='cash'),0) as refunds_in_cash,
+                        coalesce(sum(pr.amount) filter (where pr.type='credits'),0) as refunds_in_credits,
+                        coalesce(sum(pr.amount) filter (where pr.type='transfer'),0) as refunds_in_transfer,
+                        coalesce(sum(pc.captured_amount) filter (where cd.category = 'REFUND'),0) as credits_refund,
+                        coalesce(sum(pc.captured_amount) filter (where cd.category <> 'REFUND'),0) as credits_marketing
+                    from orders_order o
+                        left join shoppers_shoppercommission shc on o.id = shc.reference_id
+                        left join orders_ordercall oc on oc.order_id = o.id
+                        left join payments_refund pr on pr.order_id = o.id
+                        left join orders_ordergroup og on og.id = o.order_group_id
+                	    left join payments_ordergrouppayment as ogp on ogp.order_group_id = og.id
+                        left join payments_creditspartialcharge pc on pc.transaction_id::text = ogp.external_charge_id
+                    	left join payments_creditsdeposit cd on cd.id = pc.deposit_id 
+                    where 1=1
+                        and (shc.reference_content_type_id is null or shc.reference_content_type_id = 25)
+                        and (ogp.extra_data is null or ogp.extra_data like '%%"type":"wallet"%%')
+                        and (ogp.status is null or ogp.status = 'CAPTURED')
+                        and o.actual_delivery_time >= {{desde}} - interval '1 day' 
+                        and o.actual_delivery_time < {{hasta}} + interval '2 day'
+                        and o.actual_delivery_time at time zone 'America/Mexico_City' >= {{desde}} 
+                        and o.actual_delivery_time at time zone 'America/Mexico_City' < {{hasta}} + interval '1 day'
+                        and o.currency = 'MXN'
+                        and o.status = 'DELIVERED'
+                        and o.order_kind = 'NORMAL'
+                    group by 1
+                    ) a on a.order_id = o.id
+    
+            where 1=1
+                [[and s.id in ({{store_id}})]]
+                and o.actual_delivery_time >= {{desde}} - interval '1 day' 
+                and o.actual_delivery_time < {{hasta}} + interval '2 day'
+                and o.actual_delivery_time at time zone 'America/Mexico_City' >= {{desde}} 
+                and o.actual_delivery_time at time zone 'America/Mexico_City' < {{hasta}} + interval '1 day'
+                and o.currency = 'MXN'
+                and o.status = 'DELIVERED'
+                and o.order_kind = 'NORMAL'
+            group by 1,2,3
+            ) b
+            
+            left join 
+                (select 
+                    case when o.platform = 0 and (o.client_bundle like '%uber%' or (o.client_bundle is null and u.tmp_uber_original_segmentation = 'Uber')) then 'Uber' else 'Cornershop' end as order_platform,
+                    concat(s.id, ' - ', s.name) as store,
+                    coalesce(sum(o.total_receipt) filter (where o.order_kind = 'GIFT_ORDER'), 0) as ad_revenue_cost,
+                    coalesce(sum(o.total_receipt) filter (where o.order_kind = 'POST_SALE'), 0) as post_sale_refunds
+                from orders_order o
+                    join crm_users_view u on u.id = o.user_id
+                    join catalog_storebranch sb on sb.id = o.store_branch_id
+                    join catalog_store s on s.id = sb.store_id 
+                where 1=1
+                    [[and s.id in ({{store_id}})]]
+                    and o.order_kind in ('GIFT_ORDER','POST_SALE')
+                    and o.currency = 'MXN'
+                    and o.actual_delivery_time >= {{desde}} - interval '1 day' 
+                    and o.actual_delivery_time < {{hasta}} + interval '2 day'
+                    and o.actual_delivery_time at time zone 'America/Mexico_City' >= {{desde}} 
+                    and o.actual_delivery_time at time zone 'America/Mexico_City' < {{hasta}} + interval '1 day'
+                group by 1,2
+                ) c using (order_platform, store)
+        ) d
+    ) e
