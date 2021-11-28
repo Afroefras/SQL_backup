@@ -25,12 +25,12 @@ from
                 coalesce(sum(o.commission*o.total_receipt) ,0) as partner_commission,
                 coalesce(sum(o.bags),0)*3.9 as bags,
                 coalesce(sum(o.cart_total),0)*0.03 as processing_fees,
-                sum(a.total_commission) as shopper_commission,
-                sum(a.from_call_rate + a.to_call_rate)*22.3 as replacement_calls,
-                sum(a.refunds_in_cash) as refunds_in_cash,
-                sum(a.refunds_in_credits) as refunds_in_credits,
-                sum(a.refunds_in_transfer) as refunds_in_transfer,
-                sum(a.credits_refund) as credits_refund
+                coalesce(sum(a.total_commission),0) as shopper_commission,
+                coalesce(sum(a.from_call_rate + a.to_call_rate),0)*22.3 as replacement_calls,
+                coalesce(sum(a.refunds_in_cash),0) as refunds_in_cash,
+                coalesce(sum(a.refunds_in_credits),0) as refunds_in_credits,
+                coalesce(sum(a.refunds_in_transfer),0) as refunds_in_transfer,
+                coalesce(sum(a.credits_refund),0) as credits_refund
             from orders_order o
                 join crm_users_view u on u.id = o.user_id
                 join catalog_storebranch sb on sb.id = o.store_branch_id
