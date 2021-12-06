@@ -1,0 +1,12 @@
+select 
+    concat(b.id, ' - ', b.name) as brand,
+    concat(c.id, ' - ', c.name) as category_id,
+    count(distinct p.id) as products_in_category
+from catalog_category c 
+    join catalog_product p on p.category_id = c.id
+    join catalog_brand b on b.id = p.brand_id
+where 1=1
+    and b.name ilike '%fabuloso%'
+    and p.is_active
+group by 1,2
+order by products_in_category desc;
