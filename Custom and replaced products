@@ -6,6 +6,7 @@ select
     oor.order_custom_product_new_id is not null as was_replaced,
     p.name as replaced_by
 from orders_order o 
+    join catalog_storebranch sb on sb.id = o.store_branch_id
     left join orders_ordercustomproduct ocp on ocp.order_id = o.id
     left join orders_orderreplacement oor on oor.order_custom_product_new_id = ocp.id
     left join orders_orderproduct op on op.id = oor.order_product_old 
@@ -13,8 +14,8 @@ from orders_order o
 where 1=1
     and o.actual_delivery_time >= {{desde}} - interval '1 day' 
     and o.actual_delivery_time < {{hasta}} + interval '2 day'
-    and o.actual_delivery_time at time zone 'America/Mexico_City' >= {{desde}} 
-    and o.actual_delivery_time at time zone 'America/Mexico_City' < {{hasta}} + interval '1 day'
+    and o.actual_delivery_time at time zone sb.timezone >= {{desde}} 
+    and o.actual_delivery_time at time zone sb.timezone < {{hasta}} + interval '1 day'
     and o.currency = 'MXN'
     and o.status = 'DELIVERED'
     and o.order_kind = 'NORMAL'
