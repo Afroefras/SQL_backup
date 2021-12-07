@@ -1,0 +1,20 @@
+select 
+    o.id as order_id,
+    ocp.description as custom_product,
+    ocp.created_by,
+    ocp.quantity_found > 0 as was_found,
+    oor.order_custom_product_new_id is not null as was_replaced,
+    p.name as replaced_by
+from orders_order o 
+    left join orders_ordercustomproduct ocp on ocp.order_id = o.id
+    left join orders_orderreplacement oor on oor.order_custom_product_new_id = ocp.id
+    left join orders_orderproduct op on op.id = oor.order_product_old 
+    left join catalog_product p on p.id = op.product_id
+where 1=1
+    and o.actual_delivery_time >= {{desde}} - interval '1 day' 
+    and o.actual_delivery_time < {{hasta}} + interval '2 day'
+    and o.actual_delivery_time at time zone 'America/Mexico_City' >= {{desde}} 
+    and o.actual_delivery_time at time zone 'America/Mexico_City' < {{hasta}} + interval '1 day'
+    and o.currency = 'MXN'
+    and o.status = 'DELIVERED'
+    and o.order_kind = 'NORMAL'
