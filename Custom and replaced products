@@ -1,7 +1,9 @@
 select 
     o.id as order_id,
+    o.qty_products_found,
     ocp.description as custom_product,
     ocp.created_by,
+    ocp.quantity_found,
     ocp.quantity_found > 0 as was_found,
     oor.order_custom_product_new_id is not null as was_replaced,
     p.name as replaced_by
