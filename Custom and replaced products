@@ -1,4 +1,8 @@
 select 
+    concat(s.id, ' - ', s.name) as store,
+    case when s.id in (2902,2648,2712) then 'Convenience'
+        when sc.id <> 13 and not s.is_longtail then 'Non-Groceries'
+        when sc.id = 13 and not s.is_longtail then 'Groceries' else 'Self-service' end as store_type,
     o.id as order_id,
     o.qty_products_found,
     ocp.description as custom_product,
@@ -9,11 +13,17 @@ select
     p.name as replaced_by
 from orders_order o 
     join catalog_storebranch sb on sb.id = o.store_branch_id
+    join catalog_store s on s.id = sb.store_id
+    left join catalog_storecollectionitem sci on sci.store_id = s.id
+    left join catalog_storecollection sc on sc.id = sci.collection_id
     left join orders_ordercustomproduct ocp on ocp.order_id = o.id
     left join orders_orderreplacement oor on oor.order_custom_product_new_id = ocp.id
     left join orders_orderproduct op on op.id = oor.order_product_old 
     left join catalog_product p on p.id = op.product_id
 where 1=1
+    and s.id in (2648,2712,2902,22,45,25,9,7,1423,3729) --relevant Groceries and Convenience stores
+    and s.country = 'MX'
+    and s.status = 'ACTIVE'
     and o.actual_delivery_time >= {{desde}} - interval '1 day' 
     and o.actual_delivery_time < {{hasta}} + interval '2 day'
     and o.actual_delivery_time at time zone sb.timezone >= {{desde}} 
@@ -21,3 +31,4 @@ where 1=1
     and o.currency = 'MXN'
     and o.status = 'DELIVERED'
     and o.order_kind = 'NORMAL'
+order by store_type;
