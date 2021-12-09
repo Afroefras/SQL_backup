@@ -1,0 +1,39 @@
+select distinct product_id, * from
+(select 
+    id as product_id,
+    unnest(regexp_matches(name, {{regex}})) as product,
+    description,
+    barcodes as barcode,
+    package
+from catalog_product
+where 1=1
+    and currency = 'MXN'
+    and barcodes is not null
+    and barcodes <> '{}'
+    and is_active
+union
+select 
+    id as product_id,
+    name as product,
+    unnest(regexp_matches(description, {{regex}})) as description,
+    barcodes as barcode,
+    package
+from catalog_product
+where 1=1
+    and currency = 'MXN'
+    and barcodes is not null
+    and barcodes <> '{}'
+    and is_active
+union
+select 
+    id as product_id,
+    name as product,
+    description,
+    barcodes as barcode,
+    unnest(regexp_matches(package, {{regex}})) as package
+from catalog_product
+where 1=1
+    and currency = 'MXN'
+    and barcodes is not null
+    and barcodes <> '{}'
+    and is_active) a
