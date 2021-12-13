@@ -1,0 +1,12 @@
+select 
+    distinct s.id as store_id,
+    s.name as store,
+    sc.name as store_category
+from catalog_store s
+    join catalog_storecollectionitem sci on sci.store_id = s.id
+    join catalog_storecollection sc on sc.id = sci.collection_id
+    join catalog_storecollectionlocalization scl on scl.collection_id = sc.id and scl.language = 'es-mx'
+where 1=1
+    and s.country = 'MX'
+    and s.status = 'ACTIVE'
+order by 1;
