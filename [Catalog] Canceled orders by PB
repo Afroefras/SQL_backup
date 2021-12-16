@@ -1,0 +1,27 @@
+select * from    
+    (select *,
+        sum(times_ordered) over (partition by week order by times_ordered desc)/sum(times_ordered) over (partition by week) as cumsum,
+        row_number() over (partition by week order by times_ordered desc) as n
+    from
+        (select 
+            to_char(o.promised_delivery_time at time zone sb.timezone, 'YYYY-IW') as week,
+            concat(pb.id, '-', p.name, ' ', p.package) as productbranch,
+            count(distinct o.id) as times_ordered,
+            coalesce(sum(op.quantity_found),0) as qty_found,
+            sum(op.cornershop_price) as total_cart
+        from orders_orderproduct op
+            join orders_order o on o.id = op.order_id
+            join catalog_storebranch sb on sb.id = o.store_branch_id
+            join catalog_product p on p.id = op.product_id
+            join catalog_productbranch pb on pb.product_id = p.id and pb.branch_id = sb.id
+        where 1=1
+            and o.external_id in (
+
+            )
+            and op.quantity_found = 0
+        group by 1,2
+        ) a
+    order by times_ordered desc
+    ) b
+where n<=10 and cumsum < 0.5
+order by week, n;
