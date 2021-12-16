@@ -1,0 +1,31 @@
+select 
+    sb.id as branch_id,
+    o.actual_delivery_time at time zone sb.timezone as order_date,
+    p.id as product_id,
+    p.name as product,
+    p.description,
+    c.name as category,
+    b.name as brand,
+    op.quantity,
+    op.quantity_found
+from orders_orderproduct op
+    join orders_order o on o.id = op.order_id
+    join catalog_storebranch sb on sb.id = o.store_branch_id
+    join catalog_store s on s.id = sb.store_id
+    join catalog_product p on p.id = op.product_id
+    left join catalog_brand b on b.id = p.brand_id
+    left join catalog_category c on c.id = p.category_id
+where 1=1
+    -- Most popular branch
+    and sb.id = 9988
+    -- Top90% categories
+    and c.id in (136,134,28,572,26,137,979,1620,36,24,27,1011,981,988,996,931,1009,546,984,23,90,1583,25,912,75,31,67,35,86,135,910,1240,83,964,1500,29,1337,967,932,66,985,987,1004,1243,991,145,287,1390,911,74,1589,1582,1000,1516,1586,51,963,986,1241,358,908,974,323,951,928,989,1621,997,750,1584,37,1005,1008,53,143,990,230,971,1338,1585,22,1242,77,324,1613,30,71,227,52,1339)
+    and o.actual_delivery_time >= date_trunc('week',current_date) - interval '22 weeks'
+    and o.actual_delivery_time < date_trunc('day',current_date) + interval '1 day'
+    and o.actual_delivery_time at time zone sb.timezone >= date_trunc('week',current_date) - interval '22 weeks'
+    and o.actual_delivery_time at time zone sb.timezone < date_trunc('day',current_date)
+    and o.currency = 'MXN'
+    and o.status = 'DELIVERED'
+    and o.order_kind = 'NORMAL'
+    and s.status = 'ACTIVE'
+    and p.is_active
