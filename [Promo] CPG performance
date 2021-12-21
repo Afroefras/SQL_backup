@@ -1,0 +1,40 @@
+select *, 
+    found*1.00/ordered as found_rate,
+    sales*1.00/orders as avg_ticket
+from
+    (select
+        string_agg(distinct concat(cpg.id, ' - ', cpg.name), ', ') as cpgs,
+        concat(b.id, ' - ', b.name) as brand,
+        concat(pp.id, ' - ', pp.name) as project,
+        pp.initial_budget,
+        sum(oc.budget_used) as budget_used,
+        count(distinct o.id) as orders,
+        count(distinct o.user_id) as users,
+        sum(op.quantity) as ordered,
+        sum(op.quantity_found) as found,
+        sum(coalesce(op.quantity_found*op.branch_price,0)) as sales
+    from promotions_promotionalproject pp
+        join promotions_promotionalprojectcomponent ppc on ppc.promotional_project_id = pp.id
+        join promotions_campaign pc on pc.id = ppc.component_id
+        join promotions_ordercampaign oc on oc.campaign_id = pc.id
+        join orders_order o on o.id = oc.order_id
+        join catalog_storebranch sb on o.shopper_store_branch_id = sb.id
+        join orders_orderproduct op on op.order_id = o.id
+        join catalog_product p on p.id = op.product_id
+        left join catalog_brand b on b.id = p.brand_id
+        left join brandcenter_brandcentercpg_brands bcpg on bcpg.brand_id = b.id 
+        left join brandcenter_brandcentercpg cpg on cpg.id = bcpg.brandcentercpg_id
+    where 1=1
+        [[and pp.id in ({{project_id}})]]
+        [[and pc.id in ({{campaign_id}})]]
+        [[and b.id in ({{brand_id}})]]
+        [[and cpg.id in ({{cpg_id}})]]
+        [[and o.actual_delivery_time >= {{from}} - interval '1 day']]
+        [[and o.actual_delivery_time < {{until}} + interval '2 day']]
+        [[and o.actual_delivery_time at time zone sb.timezone >= {{from}}]]
+        [[and o.actual_delivery_time at time zone sb.timezone < {{until}} + interval '1 day']]
+        and o.currency = 'MXN'
+        and o.status = 'DELIVERED'
+    group by 2,3,4
+    ) a
+order by project, cpgs, orders desc;
