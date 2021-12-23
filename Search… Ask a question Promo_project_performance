@@ -1,0 +1,34 @@
+select *, 
+    found*1.00/ordered as found_rate,
+    (found+replaced)*1.00/ordered as fulfillment_rate,
+    sales*1.00/orders as avg_ticket 
+from
+    (select
+        concat(pp.id, ' - ', pp.name) as project,
+        pp.initial_budget,
+        concat(pc.id, ' - ', pc.name) as campaign,
+        sum(oc.budget_used) as budget_used,
+        count(distinct o.id) as orders,
+        count(distinct o.user_id) as users,
+        sum(o.qty_products_found) as found,
+        sum(o.qty_products_ordered) as ordered,
+        sum(o.qty_products_replaced) as replaced,
+        sum(o.total_receipt) as sales
+    from promotions_ordercampaign oc
+        join promotions_campaign pc on pc.id = oc.campaign_id
+        join promotions_promotionalprojectcomponent ppc on ppc.component_id = pc.id
+        join promotions_promotionalproject pp on pp.id = ppc.promotional_project_id
+        join orders_order o on o.id = oc.order_id
+        join catalog_storebranch sb on o.shopper_store_branch_id = sb.id
+    where 1=1
+        [[and pp.id in ({{project_id}})]]
+        [[and pc.id in ({{campaign_id}})]]
+        [[and o.actual_delivery_time >= {{from}} - interval '1 day']]
+        [[and o.actual_delivery_time < {{until}} + interval '2 day']]
+        [[and o.actual_delivery_time at time zone sb.timezone >= {{from}}]]
+        [[and o.actual_delivery_time at time zone sb.timezone < {{until}} + interval '1 day']]
+        and o.currency = 'MXN'
+        and o.status = 'DELIVERED'
+    group by 1,2,3
+    ) a
+order by project, campaign, orders desc;
