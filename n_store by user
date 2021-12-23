@@ -1,0 +1,23 @@
+select
+    u.id as user_id,
+    u.email,
+    o.id as order_id,
+    o.actual_delivery_time at time zone sb.timezone as order_date,
+    row_number() over (partition by u.id order by o.actual_delivery_time) as n_order,
+    concat(s.id, ' - ', s.name) as store
+from orders_order o
+    join catalog_storebranch sb on sb.id = o.store_branch_id
+    join catalog_store s on s.id = sb.store_id
+    join crm_users_view u on u.id = o.user_id
+where 1=1
+    and u.id in
+(
+
+)
+    [[and o.actual_delivery_time >= {{from}} - interval '1 day']]
+    [[and o.actual_delivery_time < {{until}} + interval '2 day']]
+    [[and o.actual_delivery_time at time zone sb.timezone >= {{from}}]]
+    [[and o.actual_delivery_time at time zone sb.timezone < {{until}} + interval '1 day']]
+    and o.currency = 'MXN'
+    and o.status = 'DELIVERED'
+order by user_id, n_order;
