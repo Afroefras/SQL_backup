@@ -1,25 +1,31 @@
 select *,
-    case when nongroceries_orders=0 and groceries_orders=0 and selfservice_orders>0 then 'Non-Groceries only'
-        when nongroceries_orders=0 and groceries_orders>0  and selfservice_orders=0 then 'Supermercados only'
-        when nongroceries_orders>0 and groceries_orders=0  and selfservice_orders=0 then 'Express only'
-        when nongroceries_orders>0 and groceries_orders>0  and selfservice_orders>0 then 'Bought all'
-        when nongroceries_orders>0 and groceries_orders>0  and selfservice_orders=0 then 'Super + Express'
-        when nongroceries_orders=0 and groceries_orders>0  and selfservice_orders>0 then 'Super + Non-Groceries'
-        when nongroceries_orders>0 and groceries_orders=0  and selfservice_orders>0 then 'Express + Non-Groceries'
+    case when total_orders > 20 then 1 else 0 end as more_than_20_orders,
+    case when supermarket_orders>0 and express_orders=0 and rest_of_ng_orders=0 then 'Supermercados only'
+        when supermarket_orders=0  and express_orders>0 and rest_of_ng_orders=0 then 'Express only'
+        when supermarket_orders=0  and express_orders=0 and rest_of_ng_orders>0 then 'Rest-of-NG only'
+        when supermarket_orders>0  and express_orders>0 and rest_of_ng_orders>0 then 'Bought all'
+        when supermarket_orders>0  and express_orders>0 and rest_of_ng_orders=0 then 'Super + Express'
+        when supermarket_orders>0  and express_orders=0 and rest_of_ng_orders>0 then 'Super + Rest-of-NG'
+        when supermarket_orders=0  and express_orders>0 and rest_of_ng_orders>0 then 'Express + Rest-of-NG'
         else 'what?' end as user_type
 from
     (select
-        to_char(order_month, 'YYYY-MM') as month,
         u.id as user_id,
+        u.email,
         case when date_trunc('month', coalesce(u.date_first_order, u.created)) = order_month then 1 else 0 end as is_new_user,
+        sum(ordered) as ordered,
+        sum(found) as found,
+        sum(replaced) as replaced,
+        count(distinct order_id) as total_orders,
         count(distinct order_id) filter (where order_pop) as pop_orders,
         count(distinct order_id) filter (where order_platform = 'Uber') as uber_orders,
-        count(distinct order_id) filter (where store_type = 'Non-Groceries') as nongroceries_orders,
-        count(distinct order_id) filter (where store_type = 'Groceries') as groceries_orders,
-        count(distinct order_id) filter (where store_type = 'Self-service') as selfservice_orders,
-        coalesce(sum(merchant_payment) filter (where store_type = 'Non-Groceries'), 0) as nongroceries_gmv,
-        coalesce(sum(merchant_payment) filter (where store_type = 'Groceries'), 0) as groceries_gmv,
-        coalesce(sum(merchant_payment) filter (where store_type = 'Self-service'), 0) as selfservice_gmv
+        count(distinct order_id) filter (where store_group = 'Supermarket') as supermarket_orders,
+        count(distinct order_id) filter (where store_group = 'Express') as express_orders,
+        count(distinct order_id) filter (where store_group = 'Rest of NonG') as rest_of_ng_orders,
+        coalesce(sum(merchant_payment), 0) as total_gmv,
+        coalesce(sum(merchant_payment) filter (where store_group = 'Supermarket'), 0) as supermarket_gmv,
+        coalesce(sum(merchant_payment) filter (where store_group = 'Express'), 0) as express_gmv,
+        coalesce(sum(merchant_payment) filter (where store_group = 'Rest of NonG'), 0) as rest_of_ng_gmv
     from
         (select
             distinct o.id as order_id,
@@ -28,8 +34,12 @@ from
             o.total_receipt as merchant_payment,
             o.with_subscription as order_pop,
             case when o.platform = 0 and (o.client_bundle like '%uber%' or (o.client_bundle is null and u.tmp_uber_original_segmentation = 'Uber')) then 'Uber' else 'Cornershop' end as order_platform,
-            case when sc.id <> 13 and s.is_longtail=false then 'Non-Groceries'
-                when sc.id = 13 and s.is_longtail=false then 'Groceries' else 'Self-service' end as store_type
+            case when sc.id in (4,14,16) then 'Express'
+                when sc.id = 13 then 'Supermarket' 
+                else 'Rest of NonG' end as store_group,
+            o.qty_products_ordered as ordered,
+            o.qty_products_found as found,
+            o.qty_products_replaced as replaced
         from orders_order o
             join crm_users_view u on u.id = o.user_id
             join catalog_storebranch sb on sb.id = o.store_branch_id
@@ -42,11 +52,11 @@ from
             and o.actual_delivery_time at time zone sb.timezone >= {{desde}}
             and o.actual_delivery_time at time zone sb.timezone < {{hasta}} + interval '1 day'
             and o.currency = 'MXN'
-            and o.status = 'DELIVERED'
             and o.order_kind = 'NORMAL'
+            and o.status = 'DELIVERED'
             and s.country = 'MX'
             and s.status = 'ACTIVE'
         ) a 
         join crm_users_view u on u.id = a.user_id
     group by 1,2,3
-    ) b;
+    ) b
