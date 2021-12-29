@@ -36,16 +36,16 @@ from
             count(distinct order_id) filter (where store_group = 'Supermarket') as supermarket_orders,
             count(distinct order_id) filter (where store_group = 'Express') as express_orders,
             count(distinct order_id) filter (where store_group = 'Rest of NonG') as rest_of_ng_orders,
-            coalesce(sum(merchant_payment), 0) as total_gmv,
-            coalesce(sum(merchant_payment) filter (where store_group = 'Supermarket'), 0) as supermarket_gmv,
-            coalesce(sum(merchant_payment) filter (where store_group = 'Express'), 0) as express_gmv,
-            coalesce(sum(merchant_payment) filter (where store_group = 'Rest of NonG'), 0) as rest_of_ng_gmv
+            coalesce(sum(gmv), 0) as total_gmv,
+            coalesce(sum(gmv) filter (where store_group = 'Supermarket'), 0) as supermarket_gmv,
+            coalesce(sum(gmv) filter (where store_group = 'Express'), 0) as express_gmv,
+            coalesce(sum(gmv) filter (where store_group = 'Rest of NonG'), 0) as rest_of_ng_gmv
         from
             (select
                 distinct o.id as order_id,
                 date_trunc('month', o.actual_delivery_time at time zone sb.timezone) as order_month,
                 o.user_id,
-                o.total_receipt as merchant_payment,
+                o.cart_total+o.delivery_charged as gmv,
                 o.with_subscription as order_pop,
                 case when o.platform = 0 and (o.client_bundle like '%uber%' or (o.client_bundle is null and u.tmp_uber_original_segmentation = 'Uber')) then 'Uber' else 'Cornershop' end as order_platform,
                 case when sc.id in (4,14,16) then 'Express'
