@@ -1,0 +1,15 @@
+select
+    distinct s.id as store_id,
+    s.name as store,
+    sc.id as store_category_id,
+    sc.name as store_category,
+    case when sc.id in (4,14,16) then 'Express'
+        when sc.id = 13 then 'Supermarket' else 'Rest of NonG' end as store_category_grouped,
+    case when s.id in (2902,2648, 2712) then 'Convenience'
+        when sc.id <> 13 and not s.is_longtail then 'Non-Groceries'
+        when sc.id = 13 and not s.is_longtail then 'Groceries' else 'Self-service' end as store_type
+from catalog_store s
+    left join catalog_storecollectionitem sci on sci.store_id = s.id
+    left join catalog_storecollection sc on sc.id = sci.collection_id
+where s.country = 'MX' and s.status = 'ACTIVE'
+order by 1;
