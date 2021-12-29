@@ -3,6 +3,7 @@ select
     user_type,
     count(distinct user_id) as users,
     sum(more_than_20_orders) as users_more_than_20_orders,
+    sum(is_new_user) as new_users,
     sum(pop_orders) as pop_orders,
     sum(uber_orders) as uber_orders,
     sum(total_orders) as total_orders,
