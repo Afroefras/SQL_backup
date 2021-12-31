@@ -1,0 +1,23 @@
+select 
+    concat(sb.id, '-', sb.name) as branch,
+    ss.user_id as shopper_id,
+    ss.completed_pickings,
+    ss.completed_deliveries,
+    sum(o.qty_products_found)*100.00/sum(o.qty_products_ordered) as found_rate
+from orders_order o
+    join shoppers_shopper ss on ss.user_id = o.shopper_picking_id and ss.user_id = o.shopper_delivery_id
+    join geo_city gc on gc.id = ss.city_id
+    join catalog_storebranch sb on sb.id = o.store_branch_id
+where 1=1
+    and o.store_branch_id = 136
+    and ss.completed_pickings < 25 
+    and ss.completed_deliveries < 25
+    and o.actual_delivery_time >= {{start_date}} - interval '1 day' 
+    and o.actual_delivery_time < {{end_date}} + interval '2 day'
+    and o.actual_delivery_time at time zone gc.timezone >= {{start_date}} 
+    and o.actual_delivery_time at time zone gc.timezone < {{end_date}} + interval '1 day'
+    and o.status = 'DELIVERED'
+    and ss.status not in ('BLOCKED','INACTIVE')
+    and ss.contract_type <> 'INTERNAL'
+group by 1,2,3,4
+order by found_rate;
