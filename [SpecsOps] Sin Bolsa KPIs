@@ -1,15 +1,25 @@
-select *,
-    total_sent*100.00/(total_orders+1e-10) as "%_sent_vs_total",
-    total_accepted*100.00/(total_sent+1e-10) as "%_accepted_vs_sent",
-    total_accepted*100.00/(total_orders+1e-10) as "%_accepted_vs_total",
+select 
+    city, order_date,
     
-    groceries_sent*100.00/(groceries_orders+1e-10) as "%_groc_sent_vs_total",
-    groceries_accepted*100.00/(groceries_sent+1e-10) as "%_groc_accepted_vs_sent",
-    groceries_accepted*100.00/(groceries_orders+1e-10) as "%_groc_accepted_vs_total",
+    --total_sent*100.00/(total_orders+1e-10) as "%_sent_vs_total",
+    --total_accepted*100.00/(total_sent+1e-10) as "%_accepted_vs_sent",
+    --total_accepted*100.00/(total_orders+1e-10) as "%_accepted_vs_total",
     
     nongroceries_sent*100.00/(nongroceries_orders+1e-10) as "%_nongroc_sent_vs_total",
     nongroceries_accepted*100.00/(nongroceries_sent+1e-10) as "%_nongroc_accepted_vs_sent",
-    nongroceries_accepted*100.00/(nongroceries_orders+1e-10) as "%_nongroc_accepted_vs_total"
+    --nongroceries_accepted*100.00/(nongroceries_orders+1e-10) as "%_nongroc_accepted_vs_total",
+    
+    --groceries_sent*100.00/(groceries_orders+1e-10) as "%_groc_sent_vs_total",
+    --groceries_accepted*100.00/(groceries_sent+1e-10) as "%_groc_accepted_vs_sent",
+    --groceries_accepted*100.00/(groceries_orders+1e-10) as "%_groc_accepted_vs_total",
+    
+    avg_products_accepted, avg_products_no_accepted,
+    avg_rating_accepted, avg_rating_no_accepted,
+    avg_checkouttime_accepted, avg_checkouttime_no_accepted,
+    avg_deliverytime_accepted, avg_deliverytime_no_accepted,
+    
+    accepted_with_shoppermistake*100.00/(total_orders+1e-10) as "%_accepted_with_shoppermistake",
+    no_accepted_with_shoppermistake*100.00/(total_orders+1e-10) as "%_no_accepted_with_shoppermistake"
 from
     (select
         city,
@@ -19,13 +29,28 @@ from
         count(distinct order_id) filter (where message_sent) as total_sent,
         count(distinct order_id) filter (where message_sent and has_no_bags) as total_accepted,
         
+        count(distinct order_id) filter (where store_type='Non-Groceries') as nongroceries_orders,
+        count(distinct order_id) filter (where message_sent and store_type='Non-Groceries') as nongroceries_sent,
+        count(distinct order_id) filter (where message_sent and has_no_bags and store_type='Non-Groceries') as nongroceries_accepted,
+        
         count(distinct order_id) filter (where store_type='Groceries') as groceries_orders,
         count(distinct order_id) filter (where message_sent and store_type='Groceries') as groceries_sent,
         count(distinct order_id) filter (where message_sent and has_no_bags and store_type='Groceries') as groceries_accepted,
         
-        count(distinct order_id) filter (where store_type='Non-Groceries') as nongroceries_orders,
-        count(distinct order_id) filter (where message_sent and store_type='Non-Groceries') as nongroceries_sent,
-        count(distinct order_id) filter (where message_sent and has_no_bags and store_type='Non-Groceries') as nongroceries_accepted
+        count(distinct order_id) filter (where shopper_mistake and message_sent and has_no_bags) as accepted_with_shoppermistake,
+        count(distinct order_id) filter (where shopper_mistake and message_sent and not has_no_bags) as no_accepted_with_shoppermistake,
+        
+        avg(order_rating) filter (where message_sent and has_no_bags) as avg_rating_accepted,
+        avg(order_rating) filter (where message_sent and not has_no_bags) as avg_rating_no_accepted,
+        
+        avg(n_products) filter (where message_sent and has_no_bags) as avg_products_accepted,
+        avg(n_products) filter (where message_sent and not has_no_bags) as avg_products_no_accepted,
+        
+        avg(checkout_time) filter (where message_sent and has_no_bags) as avg_checkouttime_accepted,
+        avg(checkout_time) filter (where message_sent and not has_no_bags) as avg_checkouttime_no_accepted,
+        
+        avg(delivery_time) filter (where message_sent and has_no_bags) as avg_deliverytime_accepted,
+        avg(delivery_time) filter (where message_sent and not has_no_bags) as avg_deliverytime_no_accepted
     from
         (select  
             distinct o.id as order_id,
@@ -35,17 +60,34 @@ from
             o.bags = 0 as has_no_bags,
             om.key = 'no_bags_message_sent' as message_sent,
             
-            case when s.id in (2902,2648, 2712) then 'Convenience'
+            coalesce(orr.rating, 5) as order_rating,
+            o.qty_products_found+o.qty_products_replaced as n_products,
+            ro.relation_type is not null or pr.refund > 0 as shopper_mistake,
+            
+            extract(epoch from pc.updated-ps.created)/60 as checkout_time,
+            extract(epoch from ded.updated-dow.created)/60 as delivery_time,
+            
+            case when s.id in (2902,2648,2712) then 'Convenience'
                 when sc.id <> 13 and not s.is_longtail then 'Non-Groceries'
                 when sc.id = 13 and not s.is_longtail then 'Groceries' else 'Self-service' end as store_type
-                
+            
         from orders_order as o
-            join orders_ordermetadata as om on o.id = om.order_id
-            join catalog_storebranch as sb on o.shopper_store_branch_id=sb.id
+            join orders_ordermetadata as om on om.order_id = o.id 
+            join catalog_storebranch as sb on sb.id = o.shopper_store_branch_id
+            join geo_city as gc on sb.city_id = gc.id and gc.country_id='MX'
             join catalog_store s on s.id = sb.store_id
-            join catalog_storecollectionitem sci on sci.store_id=s.id
-            join catalog_storecollection sc on sc.id=sci.collection_id
-            join geo_city as gc on sb.city_id=gc.id and gc.country_id='MX'
+            join catalog_storecollectionitem sci on sci.store_id = s.id
+            join catalog_storecollection sc on sc.id = sci.collection_id
+            left join orders_orderactivity dow on dow.order_id = o.id and dow.status='DELIVERY_ON_THE_WAY'
+            left join orders_orderactivity ded on ded.order_id = o.id and ded.status='DELIVERED'
+            left join orders_orderactivity ps on ps.order_id = o.id and ps.status='PICKING_SHOPPING'
+            left join orders_orderactivity pc on pc.order_id = o.id and pc.status='PICKING_CHECKOUT'
+            left join orders_orderrate orr on orr.order_id = o.id and orr.rate_type='CUSTOMER'
+            left join orders_relatedorder ro on ro.parent_id = o.id and ro.relation_type='POST_SALE'
+            left join 
+                (select order_id, count(id) as refund
+                from payments_refund group by 1
+                ) pr on pr.order_id = o.id
         where 1=1
             and gc.id in (6,8,10)
             and o.actual_delivery_time >= current_date - interval '4 day'
