@@ -1,0 +1,59 @@
+select *,
+    total_sent*100.00/(total_orders+1e-10) as "%_sent_vs_total",
+    total_accepted*100.00/(total_sent+1e-10) as "%_accepted_vs_sent",
+    total_accepted*100.00/(total_orders+1e-10) as "%_accepted_vs_total",
+    
+    groceries_sent*100.00/(groceries_orders+1e-10) as "%_groc_sent_vs_total",
+    groceries_accepted*100.00/(groceries_sent+1e-10) as "%_groc_accepted_vs_sent",
+    groceries_accepted*100.00/(groceries_orders+1e-10) as "%_groc_accepted_vs_total",
+    
+    nongroceries_sent*100.00/(nongroceries_orders+1e-10) as "%_nongroc_sent_vs_total",
+    nongroceries_accepted*100.00/(nongroceries_sent+1e-10) as "%_nongroc_accepted_vs_sent",
+    nongroceries_accepted*100.00/(nongroceries_orders+1e-10) as "%_nongroc_accepted_vs_total"
+from
+    (select
+        city,
+        to_char(order_date, 'YYYY-MM-DD') as order_date,
+        
+        count(distinct order_id) as total_orders,
+        count(distinct order_id) filter (where message_sent) as total_sent,
+        count(distinct order_id) filter (where message_sent and has_no_bags) as total_accepted,
+        
+        count(distinct order_id) filter (where store_type='Groceries') as groceries_orders,
+        count(distinct order_id) filter (where message_sent and store_type='Groceries') as groceries_sent,
+        count(distinct order_id) filter (where message_sent and has_no_bags and store_type='Groceries') as groceries_accepted,
+        
+        count(distinct order_id) filter (where store_type='Non-Groceries') as nongroceries_orders,
+        count(distinct order_id) filter (where message_sent and store_type='Non-Groceries') as nongroceries_sent,
+        count(distinct order_id) filter (where message_sent and has_no_bags and store_type='Non-Groceries') as nongroceries_accepted
+    from
+        (select  
+            distinct o.id as order_id,
+            o.actual_delivery_time at time zone gc.timezone as order_date,
+            concat(lpad(gc.id::text, 2, '0'), ' | ', gc.code) as city,
+            
+            o.bags = 0 as has_no_bags,
+            om.key = 'no_bags_message_sent' as message_sent,
+            
+            case when s.id in (2902,2648, 2712) then 'Convenience'
+                when sc.id <> 13 and not s.is_longtail then 'Non-Groceries'
+                when sc.id = 13 and not s.is_longtail then 'Groceries' else 'Self-service' end as store_type
+                
+        from orders_order as o
+            join orders_ordermetadata as om on o.id = om.order_id
+            join catalog_storebranch as sb on o.shopper_store_branch_id=sb.id
+            join catalog_store s on s.id = sb.store_id
+            join catalog_storecollectionitem sci on sci.store_id=s.id
+            join catalog_storecollection sc on sc.id=sci.collection_id
+            join geo_city as gc on sb.city_id=gc.id and gc.country_id='MX'
+        where 1=1
+            and gc.id in (6,8,10)
+            and o.actual_delivery_time >= current_date - interval '4 day'
+            and o.actual_delivery_time at time zone gc.timezone >= current_date - interval '3 day'
+            and o.actual_delivery_time at time zone gc.timezone < current_date
+            and o.status = 'DELIVERED'
+            and o.order_kind = 'NORMAL'
+        ) a
+    group by 1,2
+    ) b
+order by city, order_date desc;
