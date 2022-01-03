@@ -1,12 +1,15 @@
 select 
     city, order_date,
     
-    --total_sent*100.00/(total_orders+1e-10) as "%_sent_vs_total",
-    --total_accepted*100.00/(total_sent+1e-10) as "%_accepted_vs_sent",
+    total_orders, total_sent, total_accepted,
+    total_sent*100.00/(total_orders+1e-10) as "%_sent_vs_total",
+    total_accepted*100.00/(total_sent+1e-10) as "%_accepted_vs_sent",
     
+    nongroceries_orders, nongroceries_sent, nongroceries_accepted,
     nongroceries_sent*100.00/(nongroceries_orders+1e-10) as "%_nongroc_sent_vs_total",
     nongroceries_accepted*100.00/(nongroceries_sent+1e-10) as "%_nongroc_accepted_vs_sent",
     
+    groceries_orders, groceries_sent, nongroceries_accepted,
     groceries_sent*100.00/(groceries_orders+1e-10) as "%_groc_sent_vs_total",
     groceries_accepted*100.00/(groceries_sent+1e-10) as "%_groc_accepted_vs_sent",
     
@@ -89,7 +92,6 @@ from
             and gc.id in (6,8,10)
             and o.actual_delivery_time >= current_date - interval '1 week 1 day'
             and o.actual_delivery_time at time zone gc.timezone >= current_date - interval '1 week'
-            and o.actual_delivery_time at time zone gc.timezone < current_date
             and o.status = 'DELIVERED'
             and o.order_kind = 'NORMAL'
         ) a
