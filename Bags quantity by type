@@ -1,0 +1,19 @@
+select 
+    extract(month from o.actual_delivery_time at time zone gc.timezone) as mes,
+    b.bag_configuration_id,
+    case when c.internal_name is null then sb.type else c.internal_name end as type_bag,
+    sum(quantity) as cantidad_bolsa
+from orders_order o 
+    left join orders_orderbag b on o.id = b.order_id 
+    left outer join inventory_bagconfiguration sb on b.bag_configuration_id=sb.id
+    left outer join inventory_category c on sb.bag_category_id=c.id
+    join catalog_storebranch as csb on o.shopper_store_branch_id=csb.id
+    join geo_city as gc on csb.city_id=gc.id and gc.country_id='MX'
+where 1=1
+    and gc.id = 10 
+    and o.actual_delivery_time >= {{fecha}} - interval '1 day'
+    and o.actual_delivery_time at time zone gc.timezone >= {{fecha}}
+    and o.status = 'DELIVERED'
+    and o.order_kind = 'NORMAL' 
+    and b.bag_configuration_id is not null
+group by 1,2,3
