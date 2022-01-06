@@ -1,0 +1,13 @@
+select
+    gc.name,
+    round(extract(day from o.actual_delivery_time - sb.created)/7) as weeks_from_created,
+    count(distinct sb.id) as n_branches,
+    count(distinct o.id) as n_orders,
+    sum(o.total_receipt) as sales
+from orders_order o
+    join catalog_storebranch sb on sb.id = o.store_branch_id
+    join geo_city gc on gc.id = sb.city_id
+where 1=1
+    and sb.store_id in (7,3729)
+    and o.actual_delivery_time <= sb.created + interval '6 month'
+group by 1,2;
