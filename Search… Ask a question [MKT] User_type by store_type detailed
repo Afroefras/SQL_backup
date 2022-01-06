@@ -1,0 +1,23 @@
+select
+    distinct o.id,
+    o.user_id,
+    s.name as store,
+    sc.name as store_category,
+    case when sc.id in (4,14,16) then 'Express'
+        when sc.id = 13 then 'Supermarket' else 'Rest of NonG' end as store_group,
+    case when s.id in (2902,2648, 2712) then 'Convenience'
+        when sc.id <> 13 and not s.is_longtail then 'Non-Groceries'
+        when sc.id = 13 and not s.is_longtail then 'Groceries' else 'Self-service' end as store_type
+from orders_order o
+    join crm_users_view u on u.id = o.user_id
+    join catalog_storebranch sb on sb.id = o.store_branch_id
+    join catalog_store s on s.id = sb.store_id
+    left join catalog_storecollectionitem sci on sci.store_id = s.id
+    left join catalog_storecollection sc on sc.id = sci.collection_id
+where o.id in
+(
+)
+    and o.actual_delivery_time >= {{desde}} - interval '1 day' 
+    and o.actual_delivery_time < {{hasta}} + interval '2 day'
+    and o.actual_delivery_time at time zone 'America/Mexico_City' >= {{desde}} 
+    and o.actual_delivery_time at time zone 'America/Mexico_City' < {{hasta}} + interval '1 day'
