@@ -1,44 +1,48 @@
-with target_products as (
-    select *,
-        sum(products) over (partition by 1 order by products desc)*100.00/ (sum(products) over ()) as cumsum
-    from 
-        (select 
-            c.id as category_id,
-            c.name as category,
-            count(distinct p.id) as products
-        from catalog_productstore ps
-            join catalog_store s on s.id = ps.store_id
-            join catalog_product p on p.id = ps.product_id
-            join catalog_category c on c.id = p.category_id
-        where 1=1
-            and s.id in ({{store_id}})
-            and p.is_active
-            and ps.status = 'ACTIVE'
-            and s.status = 'ACTIVE'
-        group by 1,2
-        order by products desc
-        ) a
-    order by products desc
-    )
-
 select 
     distinct u.id as user_id,
     u.email,
-    count(distinct o.id) as orders,
-    sum(op.quantity) as quantity
+    count(distinct o.id) as orders
 from orders_orderproduct op
+    join catalog_product p on p.id = op.product_id
+    join 
+        (select *,
+            sum(products) over (partition by 1 order by products desc)*100.00/ (sum(products) over ()) as cumsum
+        from 
+            (select 
+                c.id as category_id,
+                count(distinct op.id) as products
+            from orders_orderproduct op
+                join orders_order o on o.id = op.order_id
+                join catalog_storebranch sb on sb.id = o.store_branch_id
+                join geo_city gc on gc.id = sb.city_id
+                join catalog_store s on s.id = sb.store_id
+                join catalog_product p on p.id = op.product_id
+                join catalog_category c on c.id = p.category_id
+            where 1=1
+                and s.id in ({{store_id}})
+                and o.actual_delivery_time >= current_date - interval '2 weeks 1 day' 
+                and o.actual_delivery_time at time zone gc.timezone >= current_date - interval '2 weeks'
+                and o.currency = 'MXN'
+                and o.order_kind = 'NORMAL'
+                and o.status = 'DELIVERED'
+                and p.is_active
+                and s.status = 'ACTIVE'
+            group by 1
+            order by products desc
+            ) a
+        order by products desc
+        ) tp on tp.category_id = p.category_id and tp.cumsum <= {{up_to_percentile}}
+    
     join orders_order o on o.id = op.order_id
     join crm_users_view u on u.id = o.user_id
+    join geo_city uc = uc.id = u.inferred_city_id and uc.country_id = 'MX'
     join catalog_storebranch sb on sb.id = o.store_branch_id
     join geo_city gc on gc.id = sb.city_id
     join catalog_store s on s.id = sb.store_id
     join catalog_storecollectionitem sci on sci.store_id = s.id
     join catalog_storecollection sc on sc.id = sci.collection_id
-    join catalog_product p on p.id = op.product_id
-    join catalog_category c on c.id = p.category_id
 where 1=1
     and s.id not in ({{store_id}})
-    and c.id in (select category_id from target_products where cumsum <= {{up_to_percentile}})
     and sc.id = 13
     and o.actual_delivery_time >= {{desde}} - interval '1 day' 
     and o.actual_delivery_time < {{hasta}} + interval '2 day'
