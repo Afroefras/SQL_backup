@@ -1,0 +1,28 @@
+select
+    distinct u.id,
+    u.email,
+    count(o.id) filter (where sc.id = 13 and not s.is_longtail) as groceries_orders,
+    count(o.id) filter (where sc.id <> 13 and not s.is_longtail and s.id not in (2902,2648, 2712)) as nongroceries_orders
+from orders_order o
+    join crm_users_view u on u.id = o.user_id
+    join geo_city uc on uc.id = u.inferred_city_id and uc.country_id = 'MX'
+    join catalog_storebranch sb on sb.id = o.store_branch_id
+    join geo_city gc on gc.id = sb.city_id and gc.country_id = 'MX'
+    join catalog_store s on s.id = sb.store_id
+    left join catalog_storecollectionitem sci on sci.store_id = s.id
+    left join catalog_storecollection sc on sc.id = sci.collection_id
+where 1=1
+    and o.actual_delivery_time >= {{desde}} - interval '1 day' 
+    and o.actual_delivery_time < {{hasta}} + interval '2 day'
+    and o.actual_delivery_time at time zone gc.timezone >= {{desde}} 
+    and o.actual_delivery_time at time zone gc.timezone < {{hasta}} + interval '1 day'
+    and o.currency = 'MXN'
+    and o.order_kind = 'NORMAL'
+    and o.status = 'DELIVERED'
+    and u.is_active
+    and s.status = 'ACTIVE'
+group by 1,2
+having 1=1
+    and count(o.id) filter (where sc.id = 13 and not s.is_longtail) >= 3
+    and count(o.id) filter (where sc.id <> 13 and not s.is_longtail and s.id not in (2902,2648, 2712)) = 0
+limit 2
