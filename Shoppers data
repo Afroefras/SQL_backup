@@ -1,0 +1,23 @@
+--extract(epoch from o.actual_delivery_time - coalesce(sh.date_first_delivery, sh.date_first_picking, sh.date_started, sh.created_at))/(60*60*24*7) as weeks_worked
+select 
+    sh.user_id as shopper_id,
+    sh.status,
+    sh.transportation,
+    sh.rating as shopper_rating,
+    sh.seniority,
+    sh.attribution as signed_by,
+    sh.picking_speed,
+    sh.picking_setup_time,
+    sh.address_lat as shopper_lat,
+    sh.address_lng as shopper_lng,
+    sh.accepted_rate,
+    sh.completed_deliveries,
+    sh.completed_pickings,
+    sh.score,
+    coalesce(sh.date_first_delivery, sh.date_first_picking, sh.date_started, sh.created_at) as shopper_first_date,
+    coalesce(sh.date_last_delivery, sh.date_last_picking, sh.last_seen) as shopper_last_date
+from shoppers_shopper sh
+where 1=1
+    and sh.language = 'es-mx'
+    and completed_pickings+completed_deliveries>0
+limit 2
