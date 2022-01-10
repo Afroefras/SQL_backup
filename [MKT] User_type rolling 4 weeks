@@ -1,0 +1,122 @@
+with orders_data as (
+    select
+        distinct o.id as order_id,
+        date_trunc('day', o.actual_delivery_time at time zone sb.timezone) as order_date,
+        extract(day from current_date - o.actual_delivery_time)/7 as weeks_from_today,
+        o.user_id,
+        case when sc.id in (4,14,16) then 'Express'
+            when sc.id = 13 then 'Supermarket' 
+            else 'Rest of NonG' end as store_group
+    from orders_order o
+        join crm_users_view u on u.id = o.user_id
+        join catalog_storebranch sb on sb.id = o.store_branch_id
+        join catalog_store s on s.id = sb.store_id
+        left join catalog_storecollectionitem sci on sci.store_id = s.id
+        left join catalog_storecollection sc on sc.id = sci.collection_id
+    where 1=1
+        and o.actual_delivery_time >= current_date - interval '8 week 1 day'
+        and o.actual_delivery_time < current_date + interval '1 day'
+        and o.actual_delivery_time at time zone sb.timezone >= current_date - interval '8 week'
+        and o.actual_delivery_time at time zone sb.timezone < current_date
+        and o.currency = 'MXN'
+        and o.order_kind = 'NORMAL'
+        and o.status = 'DELIVERED'
+        and s.country = 'MX'
+        and s.status = 'ACTIVE'
+    )
+
+select 
+    time_window,
+    to_type,
+    count(distinct user_id) as users
+from
+    (select *,
+        coalesce(user_type_group||' to '||lag(user_type_group, -1) over (partition by user_id order by aux), 'New_users at '||user_type_group) as to_type
+    from
+        (select *,
+            case when user_type in ('Only Supermercados','Only Express','Only Rest-of-NG') then 'One-format' 
+                else 'Multi-format' end as user_type_group
+        from 
+            (select *,
+                case when supermarket_orders>0 and express_orders=0 and rest_of_ng_orders=0 then 'Only Supermercados'
+                    when supermarket_orders=0  and express_orders>0 and rest_of_ng_orders=0 then 'Only Express'
+                    when supermarket_orders=0  and express_orders=0 and rest_of_ng_orders>0 then 'Only Rest-of-NG'
+                    when supermarket_orders>0  and express_orders>0 and rest_of_ng_orders>0 then 'Bought ALL'
+                    when supermarket_orders>0  and express_orders>0 and rest_of_ng_orders=0 then 'Both Super + Express'
+                    when supermarket_orders>0  and express_orders=0 and rest_of_ng_orders>0 then 'Both Super + Rest-of-NG'
+                    when supermarket_orders=0  and express_orders>0 and rest_of_ng_orders>0 then 'Both Express + Rest-of-NG'
+                    else 'what?' end as user_type
+            from
+                (select
+                    user_id,
+                    0 as aux,
+                    (select to_char(min(order_date), 'YYYY-MM-DD')||' to '||to_char(max(order_date), 'YYYY-MM-DD') 
+                        from orders_data where weeks_from_today <=4) as time_window,
+                    count(distinct order_id) filter (where store_group = 'Supermarket') as supermarket_orders,
+                    count(distinct order_id) filter (where store_group = 'Express') as express_orders,
+                    count(distinct order_id) filter (where store_group = 'Rest of NonG') as rest_of_ng_orders
+                from orders_data
+                where weeks_from_today between 0 and 4
+                group by 1
+                
+                union
+                
+                select
+                    user_id,
+                    1 as aux,
+                    (select to_char(min(order_date), 'YYYY-MM-DD')||' to '||to_char(max(order_date), 'YYYY-MM-DD') 
+                        from orders_data where weeks_from_today between 1 and 5) as time_window,
+                    count(distinct order_id) filter (where store_group = 'Supermarket') as supermarket_orders,
+                    count(distinct order_id) filter (where store_group = 'Express') as express_orders,
+                    count(distinct order_id) filter (where store_group = 'Rest of NonG') as rest_of_ng_orders
+                from orders_data
+                where weeks_from_today between 1 and 5
+                group by 1
+                
+                union
+                
+                select
+                    user_id,
+                    2 as aux,
+                    (select to_char(min(order_date), 'YYYY-MM-DD')||' to '||to_char(max(order_date), 'YYYY-MM-DD') 
+                        from orders_data where weeks_from_today between 2 and 6) as time_window,
+                    count(distinct order_id) filter (where store_group = 'Supermarket') as supermarket_orders,
+                    count(distinct order_id) filter (where store_group = 'Express') as express_orders,
+                    count(distinct order_id) filter (where store_group = 'Rest of NonG') as rest_of_ng_orders
+                from orders_data
+                where weeks_from_today between 2 and 6
+                group by 1
+                
+                union
+                
+                select
+                    user_id,
+                    3 as aux,
+                    (select to_char(min(order_date), 'YYYY-MM-DD')||' to '||to_char(max(order_date), 'YYYY-MM-DD') 
+                        from orders_data where weeks_from_today between 3 and 7) as time_window,
+                    count(distinct order_id) filter (where store_group = 'Supermarket') as supermarket_orders,
+                    count(distinct order_id) filter (where store_group = 'Express') as express_orders,
+                    count(distinct order_id) filter (where store_group = 'Rest of NonG') as rest_of_ng_orders
+                from orders_data
+                where weeks_from_today between 3 and 7
+                group by 1
+                union
+                
+                select
+                    user_id,
+                    4 as aux,
+                    (select to_char(min(order_date), 'YYYY-MM-DD')||' to '||to_char(max(order_date), 'YYYY-MM-DD') 
+                        from orders_data where weeks_from_today between 4 and 8) as time_window,
+                    count(distinct order_id) filter (where store_group = 'Supermarket') as supermarket_orders,
+                    count(distinct order_id) filter (where store_group = 'Express') as express_orders,
+                    count(distinct order_id) filter (where store_group = 'Rest of NonG') as rest_of_ng_orders
+                from orders_data
+                where weeks_from_today between 4 and 8
+                group by 1
+                ) b
+            ) c
+        ) d
+    ) e
+where aux < 4
+group by 1,2
+order by time_window, users desc;
