@@ -1,0 +1,26 @@
+select 
+    sh.user_id as shopper_id,
+    concat(sh.shopper_first_name, ' ', sh.shopper_last_name) as shopper_name,
+    concat(sb.id, ' - ', sb.name) as branch,
+    count(distinct o.id) as orders,
+    to_char(min(o.actual_delivery_time at time zone gc.timezone), 'YYYY-MM-DD HH24:MI') as first_order_date,
+    to_char(max(o.actual_delivery_time at time zone gc.timezone), 'YYYY-MM-DD HH24:MI') as last_order_date
+from orders_order o
+    join catalog_storebranch sb on sb.id = o.store_branch_id
+    join geo_city gc on gc.id = sb.city_id
+    join shoppers_shopper sh on sh.user_id = o.shopper_picking_id
+where 1=1
+    [[and sb.id = {{branch_id}}]]
+    and o.actual_delivery_time >= {{date_from}} - interval '1 day'
+    and o.actual_delivery_time < {{date_to}} + interval '2 day'
+    and o.actual_delivery_time at time zone gc.timezone >= {{date_from}}
+    and o.actual_delivery_time at time zone gc.timezone < {{date_to}} + interval '1 day'
+    [[and extract(hour from o.actual_delivery_time at time zone gc.timezone) >= {{hour_from}}]]
+    [[and extract(hour from o.actual_delivery_time at time zone gc.timezone - interval '1 minute') < {{hour_to}}]]
+    and o.currency = 'MXN'
+    and o.order_kind = 'NORMAL'
+    and o.status = 'DELIVERED'
+    and sh.status not in ('BLOCKED', 'INACTIVE')
+    and sh.contract_type <> 'INTERNAL'
+group by 1,2,3
+order by orders desc;
