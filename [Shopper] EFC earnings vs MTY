@@ -1,0 +1,38 @@
+select
+    week_of_year,
+    ((sum(delivery_commission + time_bonus) filter (where is_efc)) + (count(distinct order_id) filter (where is_efc and is_delivered))*10) / (sum(waiting_time) filter (where is_efc)) as epwh_efc,
+    (sum(delivery_commission) filter (where not is_efc)) / (sum(waiting_time) filter (where not is_efc)) as epwh_not_efc
+from 
+    (select *,
+        to_char(created, 'YYYY-IW') as week_of_year,
+        case 
+            when (waiting_time) between 0 and 15 then 0 
+            when (waiting_time) between 15 and 30 then 20
+            when (waiting_time) between 30 and 45 then 40
+            when (waiting_time) between 45 and 60 then 60
+            when (waiting_time) between 60 and 75 then 80
+            else 100 end as time_bonus
+    from
+        (select
+            distinct o.order_id,
+            shc.created,
+            sb.id = 1490 as is_efc,
+            shc.status = 'DELIVERED' as is_delivered,
+            ot.shopper_delivery_id,
+            shc.delivery_commission,
+            extract(epoch from ot.delivery_ready_to_go_time - ot.delivery_waiting_handoff_time)/3600 as waiting_time
+        from orders_orderattributes o
+            join catalog_storebranch sb on sb.id = o.branch_id
+            join geo_city gc on gc.id = sb.city_id
+            join orders_shopperscommission shc on shc.order_id = o.order_id
+            join orders_ordertimes ot on ot.order_id = o.order_id
+        where 1=1
+            and gc.id = 3
+            and shc.created >= {{date_from}} - interval '1 day'
+            and shc.created < {{date_to}} + interval '2 day'
+            and shc.created at time zone gc.timezone >= {{date_from}}
+            and shc.created at time zone gc.timezone < {{date_to}} + interval '1 day'
+            and shc.order_kind = 'NORMAL'
+        ) a
+    ) b
+group by 1;
