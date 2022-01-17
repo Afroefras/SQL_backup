@@ -1,0 +1,25 @@
+select 
+    sc.name as store_category,
+    p.id as product_id,
+    p.name as product,
+    c.name as product_category,
+    op.quantity,
+    op.quantity_found
+from orders_orderproduct op
+    join orders_order o on o.id = op.order_id
+    join catalog_storebranch sb on sb.id = o.store_branch_id
+    join catalog_store s on s.id = sb.store_id
+    join catalog_storecollectionitem sci on sci.store_id = s.id
+    join catalog_storecollection sc on sc.id = sci.collection_id
+    join catalog_product p on p.id = op.product_id
+    left join catalog_category c on c.id = p.category_id
+where 1=1
+    and o.currency = 'MXN'
+    and o.actual_delivery_time >= current_date - interval '6 week 1 day'
+    and o.actual_delivery_time < current_date + interval '1 day'
+    and o.actual_delivery_time at time zone sb.timezone >= current_date - interval '6 weeks'
+    and o.actual_delivery_time at time zone sb.timezone < current_date
+    and o.status = 'DELIVERED'
+    and o.order_kind = 'NORMAL'
+    and s.status = 'ACTIVE'
+    and p.is_active;
