@@ -1,12 +1,13 @@
 select
-    concat(u.id, '|', u.email) as user_id_email,
+    concat(u.id, '|', u.email, '|', uc.code) as "user_id|user_email|city_code",
     count(distinct o.id) as total_orders,
     count(distinct o.id) filter (where s.id = {{store_id}}) as store_orders
 from crm_users_view u
-    left join orders_order o on o.user_id = u.id
-    left join catalog_storebranch sb on sb.id = o.store_branch_id
-    left join geo_city gc on gc.id = sb.city_id
-    left join catalog_store s on s.id = sb.store_id
+    join geo_city uc on uc.id = u.inferred_city_id and uc.country_id = 'MX'
+    join orders_order o on o.user_id = u.id
+    join catalog_storebranch sb on sb.id = o.store_branch_id
+    join geo_city gc on gc.id = sb.city_id
+    join catalog_store s on s.id = sb.store_id
 where 1=1
     and u.uuid in (
 
