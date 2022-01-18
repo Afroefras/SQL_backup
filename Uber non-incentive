@@ -1,15 +1,16 @@
 select
     concat(u.id, '|', u.email) as user_id_email,
-    count(distinct o.id) as orders
-from orders_order o
-    join crm_users_view u on u.id = o.user_id
-    join catalog_storebranch sb on sb.id = o.store_branch_id
-    join catalog_store s on s.id = sb.store_id
+    count(distinct o.id) as total_orders,
+    count(distinct o.id) filter (where s.id = {{store_id}}) as store_orders
+from crm_users_view u
+    left join orders_order o on o.user_id = u.id
+    left join catalog_storebranch sb on sb.id = o.store_branch_id
+    left join geo_city gc on gc.id = sb.city_id
+    left join catalog_store s on s.id = sb.store_id
 where 1=1
     and u.uuid in (
 
     )
-    and s.id = 22
     and o.actual_delivery_time >= {{date_from}} - interval '1 day' 
     and o.actual_delivery_time < {{date_to}} + interval '2 day'
     and o.actual_delivery_time at time zone gc.timezone >= {{date_from}} 
