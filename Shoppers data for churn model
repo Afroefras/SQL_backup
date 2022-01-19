@@ -1,0 +1,27 @@
+select 
+    sh.user_id as shopper_id,
+    sh.transportation,
+    sh.seniority,
+    sh.address_lat,
+    sh.address_lng,
+    postal_code.value as postal_code,
+    official_id.value as official_id,
+    scholarity.value as scholarity,
+    marital_status.value as marital_status,
+    insurance.value as insurance,
+    bank.value as bank,
+    transport.value as transport
+from shoppers_shopper sh
+    left join shoppers_shopperdata postal_code on postal_code.shopper_id = sh.user_id and postal_code.definition_id = 7
+    left join shoppers_shopperdata official_id on official_id.shopper_id = sh.user_id and official_id.definition_id = 14
+    left join shoppers_shopperdata scholarity on scholarity.shopper_id = sh.user_id and scholarity.definition_id = 15
+    left join shoppers_shopperdata marital_status on marital_status.shopper_id = sh.user_id and marital_status.definition_id = 17
+    left join shoppers_shopperdata insurance on insurance.shopper_id = sh.user_id and insurance.definition_id = 19
+    left join shoppers_shopperdata bank on bank.shopper_id = sh.user_id and bank.definition_id = 25
+    left join shoppers_shopperdata transport on transport.shopper_id = sh.user_id and transport.definition_id = 98
+where 1=1
+    and sh.language = 'es-mx'
+    and sh.status not in ('BLOCKED', 'INACTIVE')
+    and sh.contract_type <> 'INTERNAL'
+limit 11
+--shopper_statistics_shopperstatistics
