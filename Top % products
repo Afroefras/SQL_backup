@@ -1,0 +1,31 @@
+select * 
+from
+    (select *,
+        sum(sales) over (order by sales desc)*100.00 / sum(sales) over () as cumsum
+    from
+        (select
+            p.id as product_id,
+            concat(p.name, ' | ', b.name, ' | ', p.barcodes) as product,
+            coalesce(sum(op.quantity_found*op.branch_price), 0) as sales
+        from orders_orderproduct op
+            join orders_order o on o.id = op.order_id
+            join catalog_storebranch sb on sb.id = o.store_branch_id
+            join geo_city gc on gc.id = sb.city_id
+            join catalog_store s on s.id = sb.store_id
+            join catalog_product p on p.id = op.product_id
+            left join catalog_brand b on b.id = p.brand_id
+            left join catalog_category c on c.id = p.category_id
+        where 1=1
+            and s.id in (22,1423)
+            and o.actual_delivery_time >= {{desde}} - interval '1 day' 
+            and o.actual_delivery_time < {{hasta}} + interval '2 day'
+            and o.actual_delivery_time at time zone gc.timezone >= {{desde}} 
+            and o.actual_delivery_time at time zone gc.timezone < {{hasta}} + interval '1 day'
+            and o.currency = 'MXN'
+            and o.order_kind = 'NORMAL'
+            and o.status = 'DELIVERED'
+            and p.is_active
+        group by 1,2
+        ) a
+    ) b
+where cumsum <= {{cumsum}};
