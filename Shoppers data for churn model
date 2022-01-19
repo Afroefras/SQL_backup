@@ -1,27 +1,110 @@
+with shoppers_data as (
+    select 
+        sh.user_id as shopper_id,
+        sh.transportation,
+        sh.seniority,
+        official_id.value as official_id,
+        scholarity.value as scholarity,
+        marital_status.value as marital_status,
+        insurance.value as insurance,
+        bank.value as bank,
+        transport.value as transport,
+        sh.completed_deliveries,
+        sh.completed_pickings,
+        she.completed_pickings_score,
+        she.rating,
+        she.accepted_rate,
+        she.accepted_rate_score,
+        she.fulfillment_rate,
+        she.picking_speed, 
+        she.late_minutes_score,
+        she.refund_post_sales_score,
+        she.replacements_score,
+        she.call_chat_score,
+        she.score,
+        coalesce(sh.date_last_delivery, sh.date_last_picking, sh.last_seen) as last_date,
+        'end' as end_of_shoppers_data
+    from shoppers_shopper sh
+        left join shoppers_shopperdata official_id on official_id.shopper_id = sh.user_id and official_id.definition_id = 14
+        left join shoppers_shopperdata scholarity on scholarity.shopper_id = sh.user_id and scholarity.definition_id = 15
+        left join shoppers_shopperdata marital_status on marital_status.shopper_id = sh.user_id and marital_status.definition_id = 17
+        left join shoppers_shopperdata insurance on insurance.shopper_id = sh.user_id and insurance.definition_id = 19
+        left join shoppers_shopperdata bank on bank.shopper_id = sh.user_id and bank.definition_id = 25
+        left join shoppers_shopperdata transport on transport.shopper_id = sh.user_id and transport.definition_id = 98
+        left join shopper_statistics_shopperstatistics she on she.shopper_uuid = sh.user_uuid
+    where 1=1
+        and sh.language = 'es-mx'
+        and sh.status not in ('BLOCKED', 'INACTIVE')
+        and sh.contract_type <> 'INTERNAL'
+    limit 11
+    ),
+    
+    orders_data as (
+    select
+        o.id as order_id,
+        o.shopper_delivery_id as shopper_id,
+        o.status,
+        o.total_receipt,
+        o.qty_products_found,
+        o.qty_products_ordered,
+        o.qty_products_replaced,
+        o.expected_delivery_minutes,
+        o.expected_picking_minutes,
+        o.actual_delivery_minutes,
+        o.actual_picking_minutes,
+        o.actual_delivery_time at time zone gc.timezone as order_date,
+        orr.distance,
+        extract(epoch from o.actual_delivery_time - lag(o.actual_delivery_time) over (partition by o.shopper_delivery_id order by o.actual_delivery_time))/86400 as days_elapsed,
+        row_number() over (partition by o.shopper_delivery_id order by o.actual_delivery_time desc) as last_n_order
+    from orders_order o 
+        left join orders_orderroute orr on orr.order_id = o.id and orr.delivery_status = 'DELIVERY_ON_DESTINATION'
+        join shoppers_data shd on shd.shopper_id = o.shopper_delivery_id
+        join catalog_storebranch sb on o.shopper_store_branch_id = sb.id
+        join geo_city as gc on gc.id = sb.city_id 
+    where 1=1
+        and o.actual_delivery_time >= shd.last_date - interval '2 weeks 1 day'
+        and o.actual_delivery_time < shd.last_date + interval '2 day'
+        and o.actual_delivery_time at time zone sb.timezone >= shd.last_date - interval '2 weeks'
+        and o.actual_delivery_time at time zone sb.timezone < shd.last_date + interval '1 day'
+        and o.currency = 'MXN'
+        and o.order_kind ='NORMAL'
+    ),
+    
+    commission_data as (
+    select 
+        od.order_id,
+        sum(amount) as total_commission,
+        coalesce(sum(amount) filter (where commission_type = 'DELIVERY'), 0) as delivery_commission,
+        coalesce(sum(amount) filter (where commission_type = 'PICKING'), 0) as picking_commission,
+        coalesce(sum(amount) filter (where commission_type = 'TIPPING'), 0) as tipping_commission,
+        coalesce(sum(amount) filter (where commission_type not in ('DELIVERY','PICKING','TIPPING')), 0) as other_commission
+    from orders_data od
+        join shoppers_shoppercommission shc on shc.reference_id = od.order_id
+    group by 1
+    )
+    
 select 
-    sh.user_id as shopper_id,
-    sh.transportation,
-    sh.seniority,
-    sh.address_lat,
-    sh.address_lng,
-    postal_code.value as postal_code,
-    official_id.value as official_id,
-    scholarity.value as scholarity,
-    marital_status.value as marital_status,
-    insurance.value as insurance,
-    bank.value as bank,
-    transport.value as transport
-from shoppers_shopper sh
-    left join shoppers_shopperdata postal_code on postal_code.shopper_id = sh.user_id and postal_code.definition_id = 7
-    left join shoppers_shopperdata official_id on official_id.shopper_id = sh.user_id and official_id.definition_id = 14
-    left join shoppers_shopperdata scholarity on scholarity.shopper_id = sh.user_id and scholarity.definition_id = 15
-    left join shoppers_shopperdata marital_status on marital_status.shopper_id = sh.user_id and marital_status.definition_id = 17
-    left join shoppers_shopperdata insurance on insurance.shopper_id = sh.user_id and insurance.definition_id = 19
-    left join shoppers_shopperdata bank on bank.shopper_id = sh.user_id and bank.definition_id = 25
-    left join shoppers_shopperdata transport on transport.shopper_id = sh.user_id and transport.definition_id = 98
-where 1=1
-    and sh.language = 'es-mx'
-    and sh.status not in ('BLOCKED', 'INACTIVE')
-    and sh.contract_type <> 'INTERNAL'
-limit 11
---shopper_statistics_shopperstatistics
+    shd.completed_pickings / (completed_deliveries+1e-10) as pickings_vs_deliveries,
+    shd.*, 
+    od.status = 'DELIVERED' as delivered_order,
+    od.total_receipt,
+    od.qty_products_ordered,
+    od.qty_products_replaced,
+    od.qty_products_found / (od.qty_products_ordered+1e-10) as found_rate,
+    (od.qty_products_found + od.qty_products_replaced) / (od.qty_products_ordered+1e-10) as fulfillment_rate,
+    od.expected_picking_minutes + od.expected_delivery_minutes as expected_minutes,
+    od.actual_picking_minutes + od.actual_delivery_minutes as actual_minutes,
+    od.actual_delivery_minutes / (od.actual_picking_minutes+1e-10) as deliverytime_vs_pickingtime,
+    od.actual_picking_minutes - od.expected_picking_minutes as dif_picking_minutes,
+    od.actual_delivery_minutes - od.expected_delivery_minutes as dif_delivery_minutes,
+    od.distance,
+    od.days_elapsed,
+    cd.total_commission,
+    cd.delivery_commission / (total_commission+1e-10) as delivery_commission_vs_total,
+    cd.picking_commission / (total_commission+1e-10) as picking_commission_vs_total,
+    cd.tipping_commission / (total_commission+1e-10) as tipping_commission_vs_total,
+    cd.other_commission / (total_commission+1e-10) as other_commission_vs_total,
+    extract(day from current_date - last_date) as days_since_last_date
+from shoppers_data shd
+    full join orders_data od using (shopper_id)
+    full join commission_data cd using (order_id);
