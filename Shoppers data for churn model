@@ -26,7 +26,7 @@ with shoppers_data as (
         coalesce(sh.date_last_delivery, sh.date_last_picking, sh.last_seen) at time zone gc.timezone as last_date,
         'end' as end_of_shoppers_data
     from shoppers_shopper sh
-        join geo_city gc on gc.id = sh.city_id
+        join geo_city gc on gc.id = sh.city_id and gc.id = 13
         left join shoppers_shopperdata official_id on official_id.shopper_id = sh.user_id and official_id.definition_id = 14
         left join shoppers_shopperdata scholarity on scholarity.shopper_id = sh.user_id and scholarity.definition_id = 15
         left join shoppers_shopperdata marital_status on marital_status.shopper_id = sh.user_id and marital_status.definition_id = 17
@@ -35,7 +35,6 @@ with shoppers_data as (
         left join shoppers_shopperdata transport on transport.shopper_id = sh.user_id and transport.definition_id = 98
         left join shopper_statistics_shopperstatistics she on she.shopper_uuid = sh.user_uuid
     where 1=1
-        and gc.id = 13
         and gc.country_id = 'MX'
         and sh.status not in ('BLOCKED', 'INACTIVE')
         and sh.contract_type <> 'INTERNAL'
@@ -87,13 +86,13 @@ with shoppers_data as (
     
 select 
     shd.completed_pickings / (completed_deliveries+1e-10) as pickings_vs_deliveries,
-    shd.*, 
+    shd.*,
     od.status = 'DELIVERED' as delivered_order,
     od.total_receipt,
     od.qty_products_ordered,
     od.qty_products_replaced,
-    od.qty_products_found / (od.qty_products_ordered+1e-10) as found_rate,
-    (od.qty_products_found + od.qty_products_replaced) / (od.qty_products_ordered+1e-10) as fulfillment_rate,
+    od.qty_products_found / (od.qty_products_ordered+1e-10) as order_found_rate,
+    (od.qty_products_found + od.qty_products_replaced) / (od.qty_products_ordered+1e-10) as order_fulfillment_rate,
     od.expected_picking_minutes + od.expected_delivery_minutes as expected_minutes,
     od.actual_picking_minutes + od.actual_delivery_minutes as actual_minutes,
     od.actual_delivery_minutes / (od.actual_picking_minutes+1e-10) as deliverytime_vs_pickingtime,
@@ -102,6 +101,7 @@ select
     od.distance,
     od.days_elapsed,
     cd.total_commission,
+    total_commission / (od.total_receipt+1e-10) as commission_vs_receipt,
     cd.delivery_commission / (total_commission+1e-10) as delivery_commission_vs_total,
     cd.picking_commission / (total_commission+1e-10) as picking_commission_vs_total,
     cd.tipping_commission / (total_commission+1e-10) as tipping_commission_vs_total,
