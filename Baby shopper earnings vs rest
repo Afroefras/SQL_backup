@@ -1,0 +1,22 @@
+select 
+    concat(gc.code, '|', gc.name) as city,
+    sh.completed_deliveries <= 25 as is_baby_shopper,
+    count(distinct o.id) as orders,
+    sum(amount) as total_commission,
+    coalesce(sum(amount) filter (where commission_type = 'DELIVERY'), 0) as delivery_commission,
+    coalesce(sum(amount) filter (where commission_type = 'PICKING'), 0) as picking_commission,
+    coalesce(sum(amount) filter (where commission_type = 'TIPPING'), 0) as tipping_commission,
+    coalesce(sum(amount) filter (where commission_type not in ('DELIVERY','PICKING','TIPPING')), 0) as other_commission
+from orders_order o
+    join shoppers_shoppercommission shc on shc.reference_id = o.id
+    join shoppers_shopper sh on sh.user_id = o.shopper_delivery_id
+    join catalog_storebranch sb on o.shopper_store_branch_id = sb.id
+    join geo_city as gc on gc.id = sb.city_id and gc.country_id = 'MX'
+where 1=1
+    and o.actual_delivery_time >= {{date_from}} - interval '2 weeks 1 day'
+    and o.actual_delivery_time < {{date_to}} + interval '2 day'
+    and o.actual_delivery_time at time zone sb.timezone >= {{date_from}} - interval '2 weeks'
+    and o.actual_delivery_time at time zone sb.timezone < {{date_to}} + interval '1 day'
+    and o.currency = 'MXN'
+    and o.order_kind ='NORMAL'
+group by 1,2;
