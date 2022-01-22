@@ -1,0 +1,21 @@
+select 
+    concat(u.id, '|', user.email ) as "user_id|user_email",
+    coalesce(count(distinct m.identifier),0) as n_memberships,
+    count(distinct o.id) as orders
+from orders_order o 
+    join catalog_storebranch sb on sb.id = o.store_branch_id
+    join catalog_store s on s.id = sb.store_id
+    join geo_city gc on gc.id = sb.city_id
+    join crm_users_view u on u.id = o.user_id
+    left join loyalty_planmembership m on m.user_uuid = u.uuid
+where 1=1
+    and s.id in (9,45,1423,1424,4785)
+    and (m.plan_uuid is null or m.plan_uuid = '38d82ad3-e9fb-4857-bbc7-72ffb327af4a')
+    and o.actual_delivery_time >= {{date_from}} - interval '1 day' 
+    and o.actual_delivery_time < {{date_to}} + interval '2 day'
+    and o.actual_delivery_time at time zone gc.timezone >= {{date_from}} 
+    and o.actual_delivery_time at time zone gc.timezone < {{date_to}} + interval '1 day'
+    and o.currency = 'MXN'
+    and o.status = 'DELIVERED'
+    and o.order_kind = 'NORMAL'
+group by 1
