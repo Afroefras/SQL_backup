@@ -20,4 +20,4 @@ where 1=1
     and o.currency = 'MXN'
     and o.order_kind = 'NORMAL'
     and o.status = 'DELIVERED'
-limit 1
+group by 1;
