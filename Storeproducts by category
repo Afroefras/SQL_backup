@@ -1,0 +1,12 @@
+select
+    concat(c.id, '-', c.name) as category,
+    count(distinct p.id) as products
+from catalog_productstore ps
+    join catalog_store s on s.id = ps.store_id
+    join catalog_product p on p.id = ps.product_id
+    join catalog_category c on c.id = p.category_id
+where 1=1
+    and s.id in (41,175)
+    and p.is_active
+    and s.status = 'ACTIVE'
+group by 1;
