@@ -1,0 +1,31 @@
+select 
+    concat(pp.id, ' - ', pp.name) as project,
+    case when o.platform = 0 and (o.client_bundle like '%uber%' or (o.client_bundle is null and u.tmp_uber_original_segmentation = 'Uber')) then 'Uber' else 'Cornershop' end as platform,
+    count(distinct o.id) as orders,
+    count(distinct o.user_id) as users,
+    count(distinct o.user_id) filter (where date_trunc('day', u.date_first_order) = date_trunc('day', o.actual_delivery_time)) as new_users,
+    sum(op.quantity) as ordered,
+    sum(op.quantity_found)*1.00 / sum(op.quantity) as found_rate,
+    sum(coalesce(op.quantity_found*op.branch_price,0)) as sales,
+    sum(coalesce(op.quantity_found*op.branch_price,0))*1.00 / count(distinct o.id) as avg_ticket
+from promotions_ordercampaign oc
+    join orders_order o on o.id = oc.order_id
+    join catalog_storebranch sb on sb.id = o.store_branch_id
+    join geo_city gc on gc.id = sb.city_id and gc.country_id = 'MX'
+    join promotions_campaign pc on pc.id = oc.campaign_id
+    join promotions_promotionalprojectcomponent ppc on ppc.component_id = pc.id
+    join promotions_promotionalproject pp on pp.id = ppc.promotional_project_id
+    join promotions_productbranchpromotion ppb on ppb.campaign_id = pc.id
+    join catalog_productbranch pb on pb.id = ppb.product_branch_id and pb.branch_id = sb.id
+    join catalog_product p on p.id = pb.product_id
+    join orders_orderproduct op on op.order_id = o.id and op.product_id = p.id
+    join crm_users_view u on u.id = o.user_id
+where 1=1
+    and pp.id = {{project_id}} --29988
+    and pc.enabled
+    and o.actual_delivery_time >= pp.valid_from 
+    and o.actual_delivery_time < pp.valid_until
+    and o.currency = 'MXN'
+    and o.status = 'DELIVERED'
+    and o.order_kind = 'NORMAL'
+group by 1,2;
