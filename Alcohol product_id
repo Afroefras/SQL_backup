@@ -1,0 +1,11 @@
+select 
+    p.id as product_id,
+    p.name as product,
+    c.id as category_id,
+    c.name as category
+from catalog_product p
+    join catalog_category c on c.id = p.category_id
+where 1=1
+    and c.tree_id = 5 --Alcohol
+    and p.currency = 'MXN'
+    and p.is_active
