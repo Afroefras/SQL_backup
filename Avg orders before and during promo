@@ -4,38 +4,30 @@ select
     promo_days,
     avg_daily_orders_pre_promo,
     avg_daily_orders_during_promo,
-    avg_daily_orders_during_promo*1.00 / avg_daily_orders_pre_promo - 1 as delta_orders,
-    avg_new_users_pre_promo,
-    avg_new_users_during_promo,
-    avg_new_users_during_promo*1.00 / avg_new_users_pre_promo - 1 as delta_new_users
+    avg_daily_orders_during_promo*1.00 / avg_daily_orders_pre_promo - 1 as delta_orders
 from
     (select
         project,
         promo_dates,
         promo_days,
-        orders_pre_promo*1.00 / (7*4) as avg_daily_orders_pre_promo,
-        orders_during_promo*1.00 / promo_days as avg_daily_orders_during_promo,
-        new_users_pre_promo*1.00 / (7*4) as avg_new_users_pre_promo,
-        new_users_during_promo*1.00 / promo_days as avg_new_users_during_promo
+        orders_pre_promo*1.00 / 28 as avg_daily_orders_pre_promo,
+        orders_during_promo*1.00 / promo_days as avg_daily_orders_during_promo
     from
         (select
             concat(pp.id, ' - ', pp.name) as project,
             to_char(valid_from at time zone 'America/Mexico_city', 'DD-MON')||' -> '||to_char(valid_until at time zone 'America/Mexico_city', 'DD-MON') as promo_dates,
             extract(epoch from pp.valid_until - pp.valid_from) / (60*60*24) as promo_days,
             count(distinct o.id) filter (where o.actual_delivery_time < pp.valid_from) as orders_pre_promo,
-            count(distinct o.id) filter (where o.actual_delivery_time >= pp.valid_from) as orders_during_promo,
-            count(distinct o.user_id) filter (where o.actual_delivery_time < pp.valid_from and date_trunc('day', o.actual_delivery_time)=date_trunc('day', u.date_first_order)) as new_users_pre_promo,
-            count(distinct o.user_id) filter (where o.actual_delivery_time >= pp.valid_from and date_trunc('day', o.actual_delivery_time)=date_trunc('day', u.date_first_order)) as new_users_during_promo
+            count(distinct o.id) filter (where o.actual_delivery_time >= pp.valid_from) as orders_during_promo
         from orders_order o
             join catalog_storebranch sb on sb.id = o.store_branch_id
             join catalog_store s on s.id = sb.store_id
             join geo_city gc on gc.id = sb.city_id and gc.country_id = 'MX'
-            join crm_users_view u on u.id = o.user_id
             join promotions_promotionalproject pp on true and pp.id = {{project_id}}
         where 1=1
             and s.id in ({{store_id}})
             [[and gc.id in ({{city_id}})]]
-            and o.actual_delivery_time >= pp.valid_from - interval '4 weeks' 
+            and o.actual_delivery_time >= pp.valid_from - interval '28 days' 
             and o.actual_delivery_time < pp.valid_until
             and o.currency = 'MXN'
             and o.order_kind = 'NORMAL'
