@@ -1,36 +1,52 @@
-select 
-    project,
-    count(distinct user_id)/promo_days as avg_daily_promo_users_new_at_store
-from 
-    (select 
-        distinct o.user_id,
-        pp.valid_from, 
-        pp.valid_until,
-        concat(pp.id, ' - ', pp.name) as project,
-        extract(epoch from pp.valid_until - pp.valid_from) / (60*60*24) as promo_days
-    from promotions_ordercampaign oc
-        join orders_order o on o.id = oc.order_id
-        join promotions_campaign pc on pc.id = oc.campaign_id
-        join promotions_promotionalprojectcomponent ppc on ppc.component_id = pc.id
-        join promotions_promotionalproject pp on pp.id = ppc.promotional_project_id
-    where 1=1
-        and pp.id = {{project_id}}
-        and ppc.component_content_type_id = 241
-        and o.actual_delivery_time >= pp.valid_from 
-        and o.actual_delivery_time < pp.valid_until
-        and o.currency = 'MXN'
-        and o.status = 'DELIVERED'
-        and o.order_kind = 'NORMAL'
-    ) tu 
-    
-    join orders_order o using (user_id)
-    join catalog_storebranch sb on sb.id = o.store_branch_id
-    left join catalog_store s on s.id = sb.store_id and s.id = {{store_id}}
-where 1=1
-    and s.id is null
-    --and o.actual_delivery_time >= tu.valid_from - interval '1 year'
-    and o.actual_delivery_time < tu.valid_until
-    and o.currency = 'MXN'
-    and o.status = 'DELIVERED'
-    and o.order_kind = 'NORMAL'
-group by 1, promo_days;
+select sum(ponder)
+from
+    (select *,
+        avg_daily_new_users_at_store*new_users_at_store / (sum(new_users_at_store) over()) as ponder
+    from
+        (select
+            project,
+            count(distinct user_id) as new_users_at_store,
+            count(distinct user_id)*1.00 / promo_days as avg_daily_new_users_at_store
+        from
+            (select 
+                user_id,
+                project,
+                promo_days
+            from 
+                (select 
+                    o.user_id,
+                    pp.valid_from, 
+                    pp.valid_until,
+                    concat(pp.id, ' - ', pp.name) as project,
+                    extract(epoch from pp.valid_until - pp.valid_from) / (60*60*24) as promo_days
+                from promotions_ordercampaign oc
+                    join orders_order o on o.id = oc.order_id
+                    join promotions_campaign pc on pc.id = oc.campaign_id
+                    join promotions_promotionalprojectcomponent ppc on ppc.component_id = pc.id
+                    join promotions_promotionalproject pp on pp.id = ppc.promotional_project_id
+                where 1=1
+                    and pp.id in ({{project_id}})
+                    and ppc.component_content_type_id = 241
+                    and o.actual_delivery_time >= pp.valid_from 
+                    and o.actual_delivery_time < pp.valid_until
+                    and o.currency = 'MXN'
+                    and o.status = 'DELIVERED'
+                    and o.order_kind = 'NORMAL'
+                group by 1,2,3,4,5
+                ) tu 
+                
+                join orders_order o using (user_id)
+                join catalog_storebranch sb on sb.id = o.store_branch_id
+                left join catalog_store s on s.id = sb.store_id and s.id = {{store_id}}
+            where 1=1
+                --and o.actual_delivery_time >= tu.valid_from - interval '1 year'
+                and o.actual_delivery_time < tu.valid_from
+                and o.currency = 'MXN'
+                and o.status = 'DELIVERED'
+                and o.order_kind = 'NORMAL'
+            group by 1,2,3
+            having count(distinct o.id) filter (where s.id is not null) = 0
+            ) a
+        group by 1, promo_days
+        ) b
+    ) c;
