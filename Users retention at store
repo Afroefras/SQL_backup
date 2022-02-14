@@ -1,0 +1,55 @@
+select count(distinct user_id) as users
+from
+    (select 
+        user_id
+    from
+        (select 
+            user_id,
+            valid_until
+        from 
+            (select 
+                o.user_id,
+                pp.valid_from,
+                pp.valid_until
+            from orders_order o
+                join catalog_storebranch sb on sb.id = o.store_branch_id
+                join geo_city gc on gc.id = sb.city_id [[and gc.id in ({{city_id}})]]
+                join catalog_store s on s.id = sb.store_id and s.id = {{store_id}}
+                join promotions_promotionalproject pp on true and pp.id in ({{project_id}})
+            where 1=1
+                and s.id = {{store_id}}
+                and o.actual_delivery_time >= pp.valid_from
+                and o.actual_delivery_time < pp.valid_until
+                and o.currency = 'MXN'
+                and o.status = 'DELIVERED'
+                and o.order_kind = 'NORMAL'
+            group by 1,2,3
+            ) tu 
+            
+            join orders_order o using (user_id)
+            join catalog_storebranch sb on sb.id = o.store_branch_id
+            join geo_city gc on gc.id = sb.city_id [[and gc.id in ({{city_id}})]]
+            left join catalog_store s on s.id = sb.store_id and s.id = {{store_id}}
+        where 1=1
+            --and o.actual_delivery_time >= tu.valid_from - interval '1 year'
+            and o.actual_delivery_time < tu.valid_from
+            and o.currency = 'MXN'
+            and o.status = 'DELIVERED'
+            and o.order_kind = 'NORMAL'
+        group by 1,2
+        having count(distinct o.id) filter (where s.id is not null) = 0
+        ) nu 
+        
+        join orders_order o using (user_id)
+        join catalog_storebranch sb on sb.id = o.store_branch_id
+        join geo_city gc on gc.id = sb.city_id [[and gc.id in ({{city_id}})]]
+        left join catalog_store s on s.id = sb.store_id and s.id = {{store_id}}
+    where 1=1
+        and o.actual_delivery_time > nu.valid_until
+        and o.actual_delivery_time < nu.valid_until + interval '2 months'
+        and o.currency = 'MXN'
+        and o.status = 'DELIVERED'
+        and o.order_kind = 'NORMAL'
+    group by 1
+    having count(distinct o.id) filter (where s.id is not null) > 0
+    ) a;
