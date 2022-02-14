@@ -10,8 +10,12 @@ from
             pp.valid_from,
             pp.valid_until
         from orders_order o
+            join catalog_storebranch sb on sb.id = o.store_branch_id
+            join geo_city gc on gc.id = sb.city_id [[and gc.id in ({{city_id}})]]
+            join catalog_store s on s.id = sb.store_id and s.id = {{store_id}}
             join promotions_promotionalproject pp on true and pp.id in ({{project_id}})
         where 1=1
+            and s.id = {{store_id}}
             and o.actual_delivery_time >= pp.valid_from - interval '28 days'
             and o.actual_delivery_time < pp.valid_from
             and o.currency = 'MXN'
@@ -30,6 +34,6 @@ from
         and o.currency = 'MXN'
         and o.status = 'DELIVERED'
         and o.order_kind = 'NORMAL'
-    group by 1,2,3
+    group by 1
     having count(distinct o.id) filter (where s.id is not null) = 0
     ) a;
