@@ -1,0 +1,32 @@
+select * 
+from
+    (select
+        shopper_mistake,
+        product,
+        count(distinct o.id) as orders,
+        row_number() over (partition by shopper_mistake order by count(distinct order_id) desc) as top_n
+    from
+        (select
+            o.id as order_id,
+            coalesce(coalesce(replace(rr.name, 'post_sales_',''), lower(relation_type)), 'unknown') as shopper_mistake,
+            concat(p.id, '|', p.name) as product
+        from orders_order as o
+            join catalog_storebranch sb on sb.id = o.store_branch_id
+            join geo_city gc on gc.id = sb.city_id
+            left join orders_relatedorder ro on ro.parent_id = o.id and ro.relation_type='POST_SALE' and ro.relation_type is not null
+            left join payments_refund r on r.order_id = o.id and (r.is_shopper_fault or r.is_driver_fault)
+            left join payments_refundreason rr on rr.id = r.reason_id
+            join orders_orderproduct op on op.order_id = o.id
+            join catalog_product p on p.id = op.product_id
+        where 1=1
+            and (ro.id is not null or r.id is not null)
+            and o.actual_delivery_time >= current_date - interval '2 weeks 1 day'
+            and o.actual_delivery_time at time zone gc.timezone >= current_date - interval '2 weeks'
+            and o.currency = 'MXN'
+            and o.status = 'DELIVERED'
+            and o.order_kind = 'NORMAL'
+        ) a
+    where shopper_mistake in ('wrong_product','bad_product_state','product_not_delivered')
+    group by 1,2
+    ) b
+where top_n <= 20
