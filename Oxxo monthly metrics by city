@@ -1,0 +1,37 @@
+select
+    extract(year from order_month) as order_year,
+    to_char(order_month, 'MM_Mon') as order_month,
+    city,
+    orders,
+    sales,
+    users,
+    orders*1.00 / users as freq,
+    sales*1.00 / orders as avg_ticket,
+    products_found*1.00 / products_ordered as found_rate,
+    product_delivered*1.00 / products_ordered as fufillment_rate
+from
+    (select
+        date_trunc('month', o.actual_delivery_time at time zone gc.timezone) as order_month,
+        concat(gc.code, '|', gc.name) as city,
+        count(distinct o.id) as orders,
+        sum(o.total_receipt) as sales,
+        count(distinct o.user_id) as users,
+        sum(o.qty_products_ordered) as products_ordered,
+        sum(o.qty_products_found) as products_found,
+        sum(o.qty_products_found + o.qty_products_replaced) as product_delivered
+    from orders_order o
+        join crm_users_view u on u.id = o.user_id
+        join catalog_storebranch sb on sb.id = o.store_branch_id
+        join geo_city gc on gc.id = sb.city_id
+        join catalog_store s on s.id = sb.store_id and s.id = 2902
+    where 1=1
+        and not (o.platform = 0 and (o.client_bundle like '%uber%' or (o.client_bundle is null and u.tmp_uber_original_segmentation = 'Uber')))
+        and o.actual_delivery_time >= {{date_from}} - interval '1 day' 
+        and o.actual_delivery_time < {{date_to}} + interval '2 day'
+        and o.actual_delivery_time at time zone gc.timezone >= {{date_from}} 
+        and o.actual_delivery_time at time zone gc.timezone < {{date_to}} + interval '1 day'
+        and o.currency = 'MXN'
+        and o.order_kind = 'NORMAL'
+        and o.status = 'DELIVERED'
+    group by 1,2
+    ) a;
