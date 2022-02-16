@@ -1,0 +1,109 @@
+with campaigns as (
+    select 
+        pp.id as project_id,
+        pp.name as project_name,
+        pp.valid_from,
+        pp.valid_until,
+        cpg.name as cpg,
+        dct.model,
+        c.id as campaign_id,
+        c.name as campaign
+    from promotions_promotionalprojectcomponent ppc
+        join promotions_promotionalproject pp on pp.id = ppc.promotional_project_id
+        join django_content_type dct on dct.id=ppc.component_content_type_id 
+        join promotions_campaign c on c.id=ppc.component_id
+        join brandcenter_brandcentercpg cpg on cpg.id=c.cpg_id
+    where 1=1
+        [[and pp.id in ({{project_id}})]]
+        [[and cpg.id in ({{cpg_id}})]]
+        and ppc.component_content_type_id = 241 
+    group by 1,2,3,4,5,6,7,8
+    ),
+    
+    products as (
+    select 
+        pbp.campaign_id,
+        pb.product_id
+    from promotions_productbranchpromotion pbp
+        join catalog_productbranch pb on pb.id=pbp.product_branch_id and pbp.campaign_id in (select campaign_id from campaigns)
+    group by 1,2
+    ),
+    
+    orders as (
+    select 
+        o.id as order_id,
+        o.user_id,
+        o.with_subscription,
+        date_trunc('day', o.actual_delivery_time at time zone sb.timezone) as order_date,
+        case when o.platform = 0 and (o.client_bundle like '%uber%' or (o.client_bundle is null and u.tmp_uber_original_segmentation = 'Uber')) then 'Uber' else 'Cornershop' end as platform,
+        concat(ca.project_id, '|', ca.project_name) as project,
+        ca.cpg,
+        ca.model,
+        ca.campaign_id,
+        concat(ca.campaign_id, '|', campaign) as campaign,
+        concat(s.id, '|', s.name) as store,
+        concat(sb.id, '|', sb.name) as branch,
+        concat(gc.code, '|', gc.name) as city,
+        oc.discount
+    from promotions_ordercampaign oc
+        join campaigns ca on ca.campaign_id=oc.campaign_id
+        join orders_order o on o.id=oc.order_id
+        join crm_users_view u on u.id = o.user_id
+        join catalog_storebranch sb on sb.id=o.shopper_store_branch_id
+        join catalog_store s on s.id=sb.store_id
+        join geo_city gc on gc.id=sb.city_id
+    where 1=1
+        and o.currency = 'MXN'
+        and o.status = 'DELIVERED'
+        and o.order_kind = 'NORMAL'
+    ),
+    
+    total as (
+    select 
+        aux.* ,
+        case when order_id=lag(order_id) over (partition by campaign_id order by order_id) then 0 else 1 end as unique_orders,
+        case when user_id=lag(user_id) over (partition by campaign_id order by user_id) then 0 else 1 end as unique_users,
+        case when order_id=lag(order_id) over (partition by campaign_id order by order_id) then 0 else 1*aux.order_budget_used end as unique_order_budget_used
+    from (
+        select 
+            ord.order_id,
+            to_char(ord.order_date, 'DD/Mon/YYYY') as order_date,
+            ord.platform,
+            ord.store,
+            ord.branch,
+            ord.city,
+            ord.with_subscription,
+            ord.user_id,
+            ord.cpg,
+            ord.project,
+            ord.campaign_id,
+            ord.campaign,
+            ord.model,
+            p.id as product_id,
+            coalesce(op.quantity,0) as requested,
+            coalesce(op.quantity_found,0) as found,
+            op.branch_price*op.quantity_found as sales,
+            ord.discount as order_budget_used
+        from orders ord
+            join orders_orderproduct op on op.order_id=ord.order_id
+            join products pr on pr.product_id=op.product_id and pr.campaign_id=ord.campaign_id
+            join catalog_product p on p.id=op.product_id
+            group by 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18
+        ) aux
+    )
+
+select 
+    project,
+    platform,
+    order_date,
+    coalesce(sum(unique_orders) filter (where with_subscription),0) as pop_orders,
+    sum(unique_orders) as orders,
+    sum(unique_users) as users,
+    sum(unique_order_budget_used) as budget_used,
+    sum(requested) as requested,
+    sum(found) as found,
+    sum(found)*1.0 / sum(requested) as foundrate,
+    sum(sales) as sales,
+    sum(sales)*1.00 / sum(unique_orders) as avg_ticket
+from total
+group by 1,2,3;
