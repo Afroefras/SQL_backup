@@ -1,0 +1,24 @@
+select *,
+    case 
+        when shopper_age < 18 then 'shoppers_menor18'
+        when shopper_age between 18 and 20 then 'shoppers_18_20'
+        when shopper_age between 21 and 30 then 'shoppers_21_30'
+        when shopper_age between 31 and 40 then 'shoppers_31_40'
+        when shopper_age between 41 and 50 then 'shoppers_41_50'
+        when shopper_age between 51 and 60 then 'shoppers_51_60'
+        else 'shoppers_60ymas' end as age_tag
+from
+    (select 
+        sh.user_id as shopper_id,
+        to_date(substring(official_id.value, 5, 6), 'YYMMDD') as birthday,
+        case when to_date(substring(official_id.value, 5, 6), 'YYMMDD') > current_date then to_date(substring(official_id.value, 5, 6), 'YYMMDD') - interval '100 years'
+            else to_date(substring(official_id.value, 5, 6), 'YYMMDD') end as birthday,
+        extract(year from age(to_date(substring(official_id.value, 5, 6), 'YYMMDD'))) as shopper_age
+    from shoppers_shopper sh
+        join geo_city gc on gc.id = sh.city_id and gc.country_id = {{country_id}}
+        left join shoppers_shopperdata official_id on official_id.shopper_id = sh.user_id and official_id.definition_id = 14
+    where 1=1
+        and sh.status not in ('BLOCKED', 'INACTIVE')
+        and sh.contract_type <> 'INTERNAL'
+    limit 22
+    ) a
