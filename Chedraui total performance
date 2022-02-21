@@ -1,0 +1,42 @@
+select
+    concat(store, ' total store') as project,
+    platform,
+    to_char(order_date, 'DD-Mon-YY') as order_date,
+    sum(is_pop_order) as pop_orders,
+    count(distinct order_id) as orders,
+    count(distinct user_id) as users,
+    sum(is_new_user) as new_users,
+    0 as budget_used,
+    sum(qty_products_ordered) as requested,
+    sum(qty_products_found) as found, 
+    sum(qty_products_found)*1.00 / sum(qty_products_ordered) as found_rate,
+    sum(total_receipt) as sales,
+    sum(total_receipt)*1.00 / count(distinct order_id) as avg_ticket
+from
+    (select 
+        o.id as order_id,
+        u.id as user_id,
+        s.name as store,
+        date_trunc('day', o.actual_delivery_time at time zone gc.timezone) as order_date,
+        case when o.platform = 0 and (o.client_bundle like '%uber%' or (o.client_bundle is null and u.tmp_uber_original_segmentation = 'Uber')) then 'Uber' else 'Cornershop' end as platform,
+        case when o.with_subscription then 1 else 0 end as is_pop_order,
+        case when date_trunc('hour', u.date_last_order)=date_trunc('hour', o.actual_delivery_time) then 1 else 0 end as is_new_user,
+        o.qty_products_found,
+        o.qty_products_ordered,
+        o.total_receipt
+    from orders_order o
+        join crm_users_view u on u.id = o.user_id
+        join catalog_storebranch sb on sb.id = o.store_branch_id
+        join geo_city gc on gc.id = sb.city_id
+        join catalog_store s on s.id = sb.store_id and s.id = 22
+    where 1=1
+        and o.actual_delivery_time >= {{date_from}} - interval '1 day' 
+        and o.actual_delivery_time < {{date_to}} + interval '2 day'
+        and o.actual_delivery_time at time zone gc.timezone >= {{date_from}} 
+        and o.actual_delivery_time at time zone gc.timezone < {{date_to}} + interval '1 day'
+        and o.currency = 'MXN'
+        and o.order_kind = 'NORMAL'
+        and o.status = 'DELIVERED'
+        and s.status = 'ACTIVE'
+    ) a
+group by store, platform, order_date;
