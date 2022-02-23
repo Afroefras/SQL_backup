@@ -1,12 +1,12 @@
 select
-    to_char(order_date_time, 'DD-Mon-YYYY') as order_date,
-    to_char(order_date_time, 'IW') as order_week,
-    to_char(order_date_time, 'Dy') as order_dow,
+    to_char(order_date, 'DD-Mon-YYYY') as order_date_short,
+    to_char(order_date, 'IW') as order_week,
+    to_char(order_date, 'Dy') as order_dow,
     *
 from
     (select
         store_city,
-        order_date_time,
+        order_date,
         count(distinct order_id) as orders,
         sum(products_delivered) as products_delivered,
         sum(total_weight_registered) as total_weight_registered,
@@ -15,7 +15,7 @@ from
         (select 
             concat(s.name, ' | ', gc.code) as store_city,
             o.id as order_id,
-            o.actual_delivery_time at time zone gc.timezone as order_date_time,
+            date_trunc('day', o.actual_delivery_time at time zone gc.timezone) as order_date,
             o.qty_products_found+o.qty_products_replaced as products_delivered,
             sum(coalesce(p.weight*op.quantity_found, 0)) as total_weight_registered,
             count(op.id) filter (where p.weight is null) as unregistered_weight_products
