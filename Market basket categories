@@ -7,14 +7,13 @@ from
         c.id as category_id,
         c.name as category
     from orders_orderproduct op 
-        join catalog_product p on p.id = op.product_id
-        join catalog_category c on c.id = p.category_id and c.id in ({{category_id}})
+        join catalog_product p on p.id = op.product_id [[and p.id in ({{product_id_id}})]]
+        join catalog_category c on c.id = p.category_id [[and c.id in ({{category_id}})]]
         join orders_order o on  o.id = op.order_id
         join catalog_storebranch sb on sb.id = o.store_branch_id
-    join catalog_store s on s.id = sb.store_id
+        join catalog_store s on s.id = sb.store_id [[and s.id in ({{store_id}})]]
         join geo_city gc on gc.id = sb.city_id
     where 1=1
-        [[and s.id in ({{store_id}})]]
         and o.actual_delivery_time >= {{date_from}} - interval '1 day' 
         and o.actual_delivery_time < {{date_to}} + interval '2 day'
         and o.actual_delivery_time at time zone gc.timezone >= {{date_from}} 
