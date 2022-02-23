@@ -1,0 +1,48 @@
+select
+    to_char(order_date, 'DD-Mon-YYYY') as order_date_short,
+    to_char(order_date, 'IW') as order_week,
+    to_char(order_date, 'Dy') as order_dow,
+    *
+from
+    (select
+        store_city,
+        order_date,
+        is_heavy,
+        count(distinct order_id) as orders,
+        sum(products_delivered) as products_delivered,
+        sum(total_weight_registered) as total_weight_registered,
+        sum(unregistered_weight_products) as unregistered_weight_products
+    from
+        (select *,
+            total_weight_registered>10 or products_delivered>20 as is_heavy
+        from
+            (select 
+                concat(s.name, ' | ', gc.code) as store_city,
+                o.id as order_id,
+                date_trunc('day', o.actual_delivery_time at time zone gc.timezone) as order_date,
+                o.qty_products_found+o.qty_products_replaced as products_delivered,
+                sum(coalesce(p.weight*op.quantity_found, 0)) as total_weight_registered,
+                count(op.id) filter (where p.weight is null) as unregistered_weight_products
+            from orders_order o
+                join catalog_storebranch sb on sb.id = o.store_branch_id
+                join geo_city gc on gc.id = sb.city_id and gc.id = 2
+                join catalog_store s on s.id = sb.store_id and s.id = 2902
+                join shoppers_shopper sh on sh.user_id = o.shopper_delivery_id and sh.transportation = 'CAR'
+                join orders_orderproduct op on op.order_id = o.id
+                join catalog_product p on p.id = op.product_id
+            where 1=1
+                and o.actual_delivery_time >= {{date_from}} - interval '1 day' 
+                and o.actual_delivery_time < {{date_to}} + interval '2 day'
+                and o.actual_delivery_time at time zone gc.timezone >= {{date_from}} 
+                and o.actual_delivery_time at time zone gc.timezone < {{date_to}} + interval '1 day'
+                and o.currency = 'MXN'
+                and o.order_kind = 'NORMAL'
+                and o.status = 'DELIVERED'
+                and s.status = 'ACTIVE'
+                and sh.status not in ('BLOCKED', 'INACTIVE')
+                and sh.contract_type <> 'INTERNAL'
+            group by 1,2,3,4
+            ) a
+        ) b
+    group by 1,2,3
+    ) c;
