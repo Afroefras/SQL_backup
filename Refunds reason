@@ -1,0 +1,25 @@
+select
+    date_trunc('day', o.actual_delivery_time at time zone gc.timezone) as order_date,
+    coalesce(coalesce(replace(rr.name, 'post_sales_',''), lower(relation_type)), 'unknown') as shopper_mistake,
+    concat(c.id, '|', c.name) as category,
+    count(distinct o.id) as order_id
+from orders_order as o
+    join catalog_storebranch sb on sb.id = o.store_branch_id
+    join geo_city gc on gc.id = sb.city_id and gc.country_id = 'MX'
+    join catalog_store s on s.id = sb.store_id and s.id = 25
+    left join orders_relatedorder ro on ro.parent_id = o.id and ro.relation_type='POST_SALE' and ro.relation_type is not null
+    left join payments_refund r on r.order_id = o.id and (r.is_shopper_fault or r.is_driver_fault)
+    left join payments_refundreason rr on rr.id = r.reason_id
+    join orders_orderproduct op on op.order_id = o.id
+    join catalog_product p on p.id = op.product_id
+    join catalog_category c on c.id = p.category_id
+where 1=1
+    and (ro.id is not null or r.id is not null)
+    and o.actual_delivery_time >= {{date_from}} - interval '1 day' 
+    and o.actual_delivery_time < {{date_to}} + interval '2 day'
+    and o.actual_delivery_time at time zone gc.timezone >= {{date_from}}
+    and o.actual_delivery_time at time zone gc.timezone < {{date_to}} + interval '1 day'
+    and o.currency = 'MXN'
+    and o.status = 'DELIVERED'
+    and o.order_kind = 'NORMAL'
+group by 1,2,3;
