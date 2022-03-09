@@ -1,0 +1,25 @@
+select 
+    city,
+    to_char(order_week, 'YYYY')||' W'||to_char(order_week, 'IW') as order_week,
+    messages_sent,
+    has_no_bags as no_bags_orders,
+    has_no_bags*1.00 / messages_sent "% accepted"
+from
+    (select
+        date_trunc('week', o.actual_delivery_time at time zone gc.timezone) as order_week,
+        gc.name as city,
+        count(distinct o.id) as messages_sent,
+        count(distinct o.id) filter (where o.bags = 0) as has_no_bags
+    from orders_order as o
+        join orders_ordermetadata as om on om.order_id = o.id and om.key = 'no_bags_message_sent'
+        join catalog_storebranch as sb on sb.id = o.shopper_store_branch_id
+        join geo_city as gc on gc.id = sb.city_id and gc.country_id='MX'
+    where 1=1
+        and o.actual_delivery_time >= {{desde}} - interval ' 1 day'
+        and o.actual_delivery_time <{{hasta}} + interval '2 day'
+        and o.actual_delivery_time at time zone gc.timezone >= {{desde}}
+        and o.actual_delivery_time at time zone gc.timezone <{{hasta}} + interval '1 day'
+        and o.status = 'DELIVERED'
+        and o.order_kind = 'NORMAL'
+    group by 1,2
+    ) a;
