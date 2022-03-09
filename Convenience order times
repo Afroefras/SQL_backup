@@ -1,0 +1,40 @@
+select 
+    date_trunc('month', o.actual_delivery_time at time zone gc.timezone) as order_month,
+    concat(s.id, '|', s.name) as store,
+    count(distinct o.id) as orders,
+    sum(extract(epoch from pick_shopping.updated - pick_assigned.created)) as going_to_store,
+    sum(extract(epoch from pick_checkout.updated - pick_shopping.created) / 60) as shopping_time,
+    sum(extract(epoch from deliv_accepted.updated - deliv_assignable.created) / 60) as looking_for_a_driver,
+    sum(extract(epoch from deliv_ready_to_go.updated - deliv_waiting_handoff.created) / 60) as driver_waiting,
+    sum(extract(epoch from coalesce(deliv_on_dest.updated, delivered.updated) - pick_shopping.created) / 60) as shopping_to_dest,
+    sum(extract(epoch from coalesce(deliv_on_dest.updated, delivered.updated) - pick_checkout.created ) / 60) as picking_checkout_to_dest,
+    sum(extract(epoch from coalesce(deliv_on_dest.updated, delivered.updated) - deliv_on_the_way.created) / 60) as delivery_on_dest_time,
+    sum(extract(epoch from delivered.updated - coalesce(deliv_on_dest.created, delivered.created)) / 60) as arrival_to_delivered,
+    sum(extract(epoch from o.actual_delivery_time - o.promised_delivery_time) / 60) as late_mins
+from orders_order o
+    join crm_users_view u on u.id = o.user_id
+    join catalog_storebranch sb on sb.id = o.store_branch_id
+    join geo_city gc on gc.id = sb.city_id
+    join catalog_store s on s.id = sb.store_id
+    left join catalog_storecollectionitem sci on sci.store_id = s.id
+    left join catalog_storecollection sc on sc.id = sci.collection_id
+    left join orders_orderactivity pick_assigned on pick_assigned.order_id = o.id and pick_assigned.status = 'PICKING_ASSIGNED'
+    left join orders_orderactivity pick_shopping on pick_shopping.order_id = o.id and pick_shopping.status = 'PICKING_SHOPPING'
+    left join orders_orderactivity pick_checkout on pick_checkout.order_id = o.id and pick_checkout.status = 'PICKING_CHECKOUT'
+    left join orders_orderactivity deliv_assignable on deliv_assignable.order_id = o.id and deliv_assignable.status = 'DELIVERY_ASSIGNABLE'
+    left join orders_orderactivity deliv_accepted on deliv_accepted.order_id = o.id and deliv_accepted.status = 'DELIVERY_ACCEPTED'
+    left join orders_orderactivity deliv_waiting_handoff on deliv_waiting_handoff.order_id = o.id and deliv_waiting_handoff.status = 'DELIVERY_WAITING_HANDOFF'
+    left join orders_orderactivity deliv_ready_to_go on deliv_ready_to_go.order_id = o.id and deliv_ready_to_go.status = 'DELIVERY_READY_TO_GO'
+    left join orders_orderactivity deliv_on_the_way on deliv_on_the_way.order_id = o.id and deliv_on_the_way.status = 'DELIVERY_ON_THE_WAY'
+    left join orders_orderactivity deliv_on_dest on deliv_on_dest.order_id = o.id and deliv_on_dest.status = 'DELIVERED_ON_DESTINATION'
+    left join orders_orderactivity delivered on delivered.order_id = o.id and delivered.status = 'DELIVERED'
+where 1=1
+    and sc.id = 14
+    and o.actual_delivery_time >= {{date_from}} - interval '1 day' 
+    and o.actual_delivery_time < {{date_to}} + interval '2 day'
+    and o.actual_delivery_time at time zone gc.timezone >= {{date_from}} 
+    and o.actual_delivery_time at time zone gc.timezone < {{date_to}} + interval '1 day'
+    and o.currency = 'MXN'
+    and o.order_kind = 'NORMAL'
+    and o.status = 'DELIVERED'
+group by 1,2;
