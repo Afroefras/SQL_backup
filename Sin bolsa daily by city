@@ -18,7 +18,7 @@ from
             when sc.id = 13 and not s.is_longtail then 'Groceries' else 'Self-service' end as store_type,
         gc.name as city,
         avg(oor.rating) as rating_msg_sent,
-        count(oor.rating) filter (where o.bags = 0 and (oor.rating is not null and oor.rating < 5)) as rating_less_than_5,
+        count(oor.rating) filter (where oor.rating is not null and oor.rating < 5) as rating_less_than_5,
         count(distinct o.id) as messages_sent,
         count(oor.rating) filter (where o.bags = 0 and (oor.rating is not null and oor.rating < 5)) as rating_less_than_5_no_bags,
         avg(oor.rating) filter (where o.bags = 0) as rating_no_bags,
@@ -33,9 +33,9 @@ from
         join orders_orderrate oor on oor.order_id = o.id and oor.rate_type = 'CUSTOMER'
     where 1=1
         and o.actual_delivery_time >= {{desde}} - interval ' 1 day'
-        and o.actual_delivery_time <{{hasta}} + interval '2 day'
+        and o.actual_delivery_time < {{hasta}} + interval '2 day'
         and o.actual_delivery_time at time zone gc.timezone >= {{desde}}
-        and o.actual_delivery_time at time zone gc.timezone <{{hasta}} + interval '1 day'
+        and o.actual_delivery_time at time zone gc.timezone < {{hasta}} + interval '1 day'
         and o.status = 'DELIVERED'
         and o.order_kind = 'NORMAL'
     group by 1,2,3
