@@ -1,0 +1,43 @@
+select 
+    city,
+    to_char(order_date, 'DD/MM/YYYY') as order_date,
+    to_char(order_date, 'YYYY-IW') as order_week,
+    store_type,
+    messages_sent,
+    has_no_bags as no_bags_orders,
+    round(has_no_bags*100.0 / messages_sent,1)||'%' as "% accepted",
+    rating_msg_sent,
+    rating_no_bags,
+    round(rating_less_than_5*100.0 / messages_sent,2)||'%' as "% rating < 5 msg_sent",
+    round(rating_less_than_5_no_bags*100.0 / has_no_bags,2)||'%' as "% rating < 5 no_bags"
+from
+    (select
+        date_trunc('day', o.actual_delivery_time at time zone gc.timezone) as order_date,
+        case 
+            when (s.id in (2902,2648, 2712) or (sc.id <> 13 and not s.is_longtail)) then 'Non-G+Conv'
+            when sc.id = 13 and not s.is_longtail then 'Groceries' else 'Self-service' end as store_type,
+        gc.name as city,
+        avg(oor.rating) as rating_msg_sent,
+        count(oor.rating) filter (where o.bags = 0 and (oor.rating is not null and oor.rating < 5)) as rating_less_than_5,
+        count(distinct o.id) as messages_sent,
+        count(oor.rating) filter (where o.bags = 0 and (oor.rating is not null and oor.rating < 5)) as rating_less_than_5_no_bags,
+        avg(oor.rating) filter (where o.bags = 0) as rating_no_bags,
+        count(distinct o.id) filter (where o.bags = 0) as has_no_bags
+    from orders_order as o
+        join orders_ordermetadata as om on om.order_id = o.id and om.key = 'no_bags_message_sent'
+        join catalog_storebranch as sb on sb.id = o.shopper_store_branch_id
+        join catalog_store s on s.id = sb.store_id
+        join catalog_storecollectionitem sci on sci.store_id = s.id
+        join catalog_storecollection sc on sc.id = sci.collection_id
+        join geo_city as gc on gc.id = sb.city_id and gc.country_id = 'MX'
+        join orders_orderrate oor on oor.order_id = o.id and oor.rate_type = 'CUSTOMER'
+    where 1=1
+        and o.actual_delivery_time >= {{desde}} - interval ' 1 day'
+        and o.actual_delivery_time <{{hasta}} + interval '2 day'
+        and o.actual_delivery_time at time zone gc.timezone >= {{desde}}
+        and o.actual_delivery_time at time zone gc.timezone <{{hasta}} + interval '1 day'
+        and o.status = 'DELIVERED'
+        and o.order_kind = 'NORMAL'
+    group by 1,2,3
+    ) a
+where store_type <> 'Self-service';
