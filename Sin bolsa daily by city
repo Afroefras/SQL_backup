@@ -1,37 +1,42 @@
 with orders_data as (
     select
         distinct o.id as order_id,
-        date_trunc('day', o.actual_delivery_time at time zone gc.timezone) as order_date,
-        case 
-            when ((sc.id = 14 and not s.is_longtail) or (sc.id <> 13 and not s.is_longtail)) then 'Non-G+Conv'
-            when sc.id = 13 and not s.is_longtail then 'Groceries' else 'Self-service' end as store_type,
         gc.name as city,
-        case when o.bags = 0 then 'accepted' else 'non_accepted' end as no_bags_decission,
-        o.qty_products_found+o.qty_products_replaced as n_products,
+        date_trunc('day', o.actual_delivery_time at time zone gc.timezone) as order_date,
+        case when sc.id = 13 then 'Groceries' else 'NonG' end as store_type,
+        
         ss.user_id as shopper_id,
         ss.transportation = 'CAR' as has_car,
+        ss.transportation in ('MOTORCYCLE','BIKE') or (iis.id is not null and ss.transportation = 'CAR') as is_eligible,
+        
+        om.id is not null as message_sent,
+        case 
+            when om.id is null then 'no_msg_sent'
+            when o.bags = 0 then 'accepted' 
+            else 'non_accepted' end as no_bags_decission,
+        
+        o.qty_products_found+o.qty_products_replaced as n_products,
         oor.rating as order_rating,
         oor.rating is not null as rating_is_not_null,
         oor.rating is not null and oor.rating < 5 as rating_is_less_than_5,
         extract(epoch from pc.updated-ps.created) / 60 as checkout_time,
         extract(epoch from ded.updated-dow.created) / 60 as delivery_time
     from orders_order as o
-        join orders_ordermetadata om on om.order_id = o.id and om.key = 'no_bags_message_sent'
-        join shoppers_shopper ss on ss.user_id = o.shopper_delivery_id
-        join inventory_inventoryowner iio on iio.object_id = ss.user_id and iio.content_type_id = 38  -- Shoppers
-        left join inventory_inventorysummary iis on iis.owner_id = iio.id and iis.asset_id = 3441
         join catalog_storebranch sb on sb.id = o.shopper_store_branch_id
+        join geo_city as gc on gc.id = sb.city_id and gc.id in (2,6,8,10) --CIUDADES CON PROYECTO SIN BOLSA
         join catalog_store s on s.id = sb.store_id
         join catalog_storecollectionitem sci on sci.store_id = s.id
         join catalog_storecollection sc on sc.id = sci.collection_id
-        join geo_city as gc on gc.id = sb.city_id and gc.country_id = 'MX'
+        join shoppers_shopper ss on ss.user_id = o.shopper_delivery_id
+        left join orders_ordermetadata as om on om.order_id = o.id and om.key = 'no_bags_message_sent' 
         join orders_orderrate oor on oor.order_id = o.id and oor.rate_type = 'CUSTOMER'
+        join inventory_inventoryowner iio on iio.object_id = ss.user_id and iio.content_type_id = 38  --SHOPPERS
+        left join inventory_inventorysummary iis on iis.owner_id = iio.id and iis.asset_id = 3441
         left join orders_orderactivity dow on dow.order_id = o.id and dow.status='DELIVERY_ON_THE_WAY'
         left join orders_orderactivity ded on ded.order_id = o.id and ded.status='DELIVERED'
         left join orders_orderactivity ps on ps.order_id = o.id and ps.status='PICKING_SHOPPING'
         left join orders_orderactivity pc on pc.order_id = o.id and pc.status='PICKING_CHECKOUT'
     where 1=1
-        and ((ss.transportation = 'CAR' and iis.id is not null) or (ss.transportation <> 'CAR'))
         and o.actual_delivery_time >= {{desde}} - interval ' 1 day'
         and o.actual_delivery_time < {{hasta}} + interval '2 day'
         and o.actual_delivery_time at time zone gc.timezone >= {{desde}}
@@ -40,9 +45,9 @@ with orders_data as (
         and o.order_kind = 'NORMAL'
     ),
     
-    refunds_orders as (
+    refund_orders as (
     select 
-        o.order_id, 
+        o.order_id,
         sum(case when ro.relation_type is not null then 1 else 0 end) as post_sale,
         count(r.id) as has_refund
     from orders_data o
@@ -53,13 +58,15 @@ with orders_data as (
     
 select
     city,
-    to_char(order_date, 'DD/MM/YYYY') as order_date,
-    to_char(order_date, 'YYYY-IW') as order_week,
+    concat('''',to_char(order_date, 'DD/MM/YYYY')) as order_date,
+    concat('''',to_char(order_date, 'YYYY-IW')) as order_week,
     store_type,
+    is_eligible,
+    message_sent,
     no_bags_decission,
     count(distinct o.order_id) as orders,
     sum(n_products) as n_products,
-    count(distinct shopper_id) as shoppers_msg_sent,
+    count(distinct shopper_id) as shoppers,
     count(distinct shopper_id) filter (where has_car) as shoppers_msg_sent_in_car,
     count(distinct o.order_id) filter (where rating_is_not_null) as orders_with_rating, 
     sum(order_rating) as sum_rating,
@@ -68,6 +75,5 @@ select
     sum(checkout_time) as sum_checkout_time,
     sum(delivery_time) as sum_delivery_time
 from orders_data as o
-    left join refunds_orders ro on o.order_id=ro.order_id and ro.post_sale+has_refund > 0
-where store_type <> 'Self-service'
-group by 1,2,3,4,5;
+    left join refund_orders ro on o.order_id=ro.order_id and ro.post_sale+has_refund > 0
+group by 1,2,3,4,5,6,7;
