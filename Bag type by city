@@ -1,0 +1,21 @@
+select
+    to_char(o.actual_delivery_time at time zone gc.timezone, 'YYYY-Mon') as order_date,
+    concat(gc.code, '|', gc.name) as city,
+    coalesce(ic.internal_name, bc.type) as type_bag,
+    count(distinct o.id) as orders
+from orders_order o 
+    join catalog_storebranch sb on sb.id = o.shopper_store_branch_id
+    join catalog_store s on s.id = sb.store_id
+    join geo_city gc on gc.id = sb.city_id and gc.id = {{city_id}}
+    left join orders_orderbag ob on o.id = ob.order_id 
+    left join inventory_bagconfiguration bc on bc.id = ob.bag_configuration_id
+    left join inventory_category ic on ic.id = bc.bag_category_id
+where 1=1
+    and o.actual_delivery_time >= {{date_from}} - interval '1 day' 
+    and o.actual_delivery_time < {{date_to}} + interval '2 day'
+    and o.actual_delivery_time at time zone gc.timezone >= {{date_from}} 
+    and o.actual_delivery_time at time zone gc.timezone < {{date_to}} + interval '1 day'
+    and o.currency = 'MXN'
+    and o.order_kind = 'NORMAL'
+    and o.status = 'DELIVERED'
+group by 1,2,3
