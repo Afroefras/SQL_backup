@@ -12,13 +12,16 @@ with orders_data as (
         om.id is not null as message_sent,
         case 
             when om.id is null then 'no_msg_sent'
-            when o.bags = 0 then 'accepted' 
+            when o.bags - ob.quantity = 0 then 'accepted' 
             else 'non_accepted' end as no_bags_decission,
         
+        coalesce(ob.quantity,0) as store_bags,
         o.qty_products_found+o.qty_products_replaced as n_products,
+        
         oor.rating as order_rating,
         oor.rating is not null as rating_is_not_null,
         oor.rating is not null and oor.rating < 5 as rating_is_less_than_5,
+        
         extract(epoch from pc.updated-ps.created) / 60 as checkout_time,
         extract(epoch from ded.updated-dow.created) / 60 as delivery_time
     from orders_order as o
@@ -27,11 +30,17 @@ with orders_data as (
         join catalog_store s on s.id = sb.store_id
         join catalog_storecollectionitem sci on sci.store_id = s.id
         join catalog_storecollection sc on sc.id = sci.collection_id
-        join shoppers_shopper ss on ss.user_id = o.shopper_delivery_id
-        left join orders_ordermetadata as om on om.order_id = o.id and om.key = 'no_bags_message_sent' 
+        
         join orders_orderrate oor on oor.order_id = o.id and oor.rate_type = 'CUSTOMER'
+        join shoppers_shopper ss on ss.user_id = o.shopper_delivery_id
+        
         join inventory_inventoryowner iio on iio.object_id = ss.user_id and iio.content_type_id = 38  --SHOPPERS
+        left join orders_ordermetadata as om on om.order_id = o.id and om.key = 'no_bags_message_sent' 
         left join inventory_inventorysummary iis on iis.owner_id = iio.id and iis.asset_id = 3441
+        
+        left join orders_orderbag ob on o.id = ob.order_id 
+        left join inventory_bagconfiguration bc on bc.id = ob.bag_configuration_id and bc.type = 'store'
+        
         left join orders_orderactivity dow on dow.order_id = o.id and dow.status='DELIVERY_ON_THE_WAY'
         left join orders_orderactivity ded on ded.order_id = o.id and ded.status='DELIVERED'
         left join orders_orderactivity ps on ps.order_id = o.id and ps.status='PICKING_SHOPPING'
@@ -65,6 +74,7 @@ select
     message_sent,
     no_bags_decission,
     count(distinct o.order_id) as orders,
+    sum(store_bags) as store_bags,
     sum(n_products) as n_products,
     count(distinct shopper_id) as shoppers,
     count(distinct shopper_id) filter (where has_car) as shoppers_msg_sent_in_car,
@@ -75,5 +85,5 @@ select
     sum(checkout_time) as sum_checkout_time,
     sum(delivery_time) as sum_delivery_time
 from orders_data as o
-    left join refund_orders ro on o.order_id=ro.order_id and ro.post_sale+has_refund > 0
+    left join refund_orders ro on o.order_id = ro.order_id and ro.post_sale+has_refund > 0
 group by 1,2,3,4,5,6,7;
