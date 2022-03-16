@@ -1,0 +1,75 @@
+with shoppers_online_hours as (
+    select
+        online_month,
+        shopper_id,
+        sum(online_hours) as online_hours
+    from
+        (select 
+            sh.user_id as shopper_id,
+            date_trunc('month', ss.start at time zone gc.timezone) as online_month,
+            extract(epoch from ss.end - ss.start)/3600 as online_hours
+        from shoppers_shoppersession ss 
+            join shoppers_shopper sh on sh.user_id = ss.shopper_id and sh.contract_type <> 'INTERNAL'
+            join geo_city as gc on sh.city_id = gc.id and gc.country_id = 'MX'
+        where 1=1
+            and ss.start >= {{date_from}} - interval '1 day' 
+            and ss.end < {{date_to}} + interval '2 day'
+            and ss.start at time zone gc.timezone >= {{date_from}}
+            and ss.end at time zone gc.timezone < {{date_to}} + interval '1 day'
+        )a
+    group by 1,2
+    ),
+    
+    shoppers_commission as (
+    select
+        date_trunc('month', o.actual_delivery_time at time zone gc.timezone) as order_month,
+        sh.user_id as shopper_id,
+        count(distinct o.id) as orders,
+        sum(amount) as total_commission,
+        coalesce(sum(amount) filter (where commission_type = 'PICKING'), 0) as picking_commission,
+        coalesce(sum(amount) filter (where commission_type = 'DELIVERY'), 0) as delivery_commission,
+        coalesce(sum(amount) filter (where commission_type = 'TIPPING'), 0) as tipping_commission,
+        coalesce(sum(amount) filter (where commission_type not in ('DELIVERY','PICKING','TIPPING')), 0) as other_commission
+    from orders_order o
+        join shoppers_shoppercommission shc on shc.reference_id = o.id 
+        join shoppers_shopper sh on sh.user_id = o.shopper_delivery_id and sh.contract_type <> 'INTERNAL'
+        join catalog_storebranch sb on o.shopper_store_branch_id = sb.id
+        join geo_city as gc on gc.id = sb.city_id and gc.country_id = 'MX'
+    where 1=1
+        and o.actual_delivery_time >= {{date_from}} - interval '1 day'
+        and o.actual_delivery_time < {{date_to}} + interval '2 day'
+        and o.actual_delivery_time at time zone gc.timezone >= {{date_from}}
+        and o.actual_delivery_time at time zone gc.timezone < {{date_to}} + interval '1 day'
+        and o.currency = 'MXN'
+        and o.order_kind ='NORMAL'
+    group by 1,2
+    ),
+    
+    total_data as (
+    select
+        sc.*,
+        so.online_hours,
+        case 
+            when online_hours <= 10 THEN 'Casual Shopper'  
+            when online_hours <= 30 THEN 'Part-Time'
+            when online_hours <= 48 THEN 'Full TIme'
+            when online_hours > 48 THEN 'Extreme' 
+            else 'what?' end as schedule
+    from shoppers_commission sc
+        join shoppers_online_hours so on so.shopper_id = sc.shopper_id and so.online_month = sc.order_month
+    )
+
+
+select
+    to_char(online_month, 'YYYY-Mon') as order_month,
+    schedule,
+    count(distinct shopper_id) as shoppers,
+    sum(orders) as orders,
+    sum(online_hours) as sum_online_hours,
+    sum(total_commission) as total_commission,
+    sum(picking_commission) as picking_commission,
+    sum(delivery_commission) as delivery_commission,
+    sum(tipping_commission) as tipping_commission,
+    sum(other_commission) as other_commission
+from total_data
+group by 1,2;
