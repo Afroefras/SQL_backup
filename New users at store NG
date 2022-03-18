@@ -1,4 +1,4 @@
-select *,
+select b.*,
     s.name,
     case 
         when sc.id in (21,26,27,34,46) then 'Belleza, Moda & Deportes'
@@ -10,7 +10,7 @@ select *,
         else 'without_family' end as store_family
 from
     (select 
-        to_char(first_order_date at time zone gc.timezone, 'IYYYMM') as order_month,
+        to_char(first_order_date, 'YYYY-MM') as order_month,
         store_id,
         count(distinct user_id) as new_users_at_store
     from 
