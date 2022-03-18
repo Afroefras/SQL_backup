@@ -1,0 +1,85 @@
+with orders_data as (
+    select
+        distinct o.id as order_id,
+        o.external_id,
+        gc.name as city,
+        date_trunc('day', o.actual_delivery_time at time zone gc.timezone) as order_date,
+        case when sc.id = 13 then 'Groceries' else 'NonG' end as store_type,
+        
+        ss.user_id as shopper_id,
+        ss.transportation = 'CAR' as has_car,
+        ss.transportation in ('MOTORCYCLE','BIKE') or (iis.id is not null and ss.transportation = 'CAR') as is_eligible,
+        
+        om.id is not null as message_sent,
+        o.bags as total_bags,
+        o.qty_products_found+o.qty_products_replaced as n_products,
+        
+        oor.rating as order_rating,
+        oor.rating is not null as rating_is_not_null,
+        oor.rating is not null and oor.rating < 5 as rating_is_less_than_5
+        
+    from orders_order as o
+        join catalog_storebranch sb on sb.id = o.shopper_store_branch_id
+        join geo_city as gc on gc.id = sb.city_id and gc.id in (2,6,8,10) --CIUDADES CON PROYECTO SIN BOLSA
+        
+        join catalog_store s on s.id = sb.store_id
+        join catalog_storecollectionitem sci on sci.store_id = s.id
+        join catalog_storecollection sc on sc.id = sci.collection_id
+        
+        join orders_orderrate oor on oor.order_id = o.id and oor.rate_type = 'CUSTOMER'
+        join shoppers_shopper ss on ss.user_id = o.shopper_delivery_id
+        
+        join inventory_inventoryowner iio on iio.object_id = ss.user_id and iio.content_type_id = 38  --SHOPPERS
+        left join orders_ordermetadata as om on om.order_id = o.id and om.key = 'no_bags_message_sent' 
+        left join inventory_inventorysummary iis on iis.owner_id = iio.id and iis.asset_id = 3441 --MATERIAL PARA PROYECTO SIN BOLSA
+    
+    where 1=1
+        and o.actual_delivery_time >= {{desde}} - interval ' 1 day'
+        and o.actual_delivery_time < {{hasta}} + interval '2 day'
+        and o.actual_delivery_time at time zone gc.timezone >= {{desde}}
+        and o.actual_delivery_time at time zone gc.timezone < {{hasta}} + interval '1 day'
+        and o.status = 'DELIVERED'
+        and o.order_kind = 'NORMAL'
+    ),
+    
+    store_bags_orders as (
+    select
+        o.order_id,
+        coalesce(sum(ob.quantity), 0) as store_bags
+    from orders_data o
+        join orders_orderbag ob using (order_id)
+        join inventory_bagconfiguration bc on bc.id = ob.bag_configuration_id and bc.type = 'store'
+    group by 1
+    ),
+    
+    total_data as (
+    select o.*,
+        sbo.store_bags,
+        case 
+            when not o.message_sent then 'no_msg_sent'
+            when o.total_bags - coalesce(sbo.store_bags, 0) <= 0 then 'accepted' 
+            else 'non_accepted' end as no_bags_decission
+    from orders_data o
+        left join store_bags_orders sbo using (order_id)
+    )
+    
+select
+    city,
+    order_date,
+    total_shoppers,
+    total_shoppers - shoppers_4_wheels as shoppers_2_wheels,
+    shoppers_4_wheels,
+    shoppers_4_wheels_with_material,
+    total_shoppers - shoppers_4_wheels + shoppers_4_wheels_with_material as shoppers_can_deliver_without_bag,
+    shoppers_4_wheels_with_material*1.00 / shoppers_4_wheels as "%shoppers_4_wheels_with_material",
+    (total_shoppers - shoppers_4_wheels + shoppers_4_wheels_with_material)*1.00 / total_shoppers as "%shoppers_can_deliver_without_bag"
+from
+    (select
+        city,
+        concat('''',to_char(order_date, 'YY-MM-DD')) as order_date,
+        count(distinct shopper_id) as total_shoppers,
+        count(distinct shopper_id) filter (where has_car) as shoppers_4_wheels,
+        count(distinct shopper_id) filter (where has_car and is_eligible) as shoppers_4_wheels_with_material
+    from total_data
+    group by 1,2
+    ) a;
