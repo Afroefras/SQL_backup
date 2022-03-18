@@ -1,0 +1,46 @@
+select b.order_month,
+    case 
+        when sc.id in (21,26,27,34,46) then 'Belleza, Moda & Deportes'
+        when sc.id in (11,18,24,36,38,42) then 'Celebraciones, Regalos y Tecnología'
+        when sc.id in (4,14,16,33,40) then 'Express'
+        when sc.id in (1,2,3,7,9,10,12,15,22,25,30,37,44) then 'Gourmet & Vida sana'
+        when sc.id in (5,6,17,28,32,39,41,45) then 'Mascotas, Hogar, trabajo'
+        when sc.id = 13 then 'Supermercados'
+        else 'without_family' end as store_family,
+    concat(s.id, '|', s.name) as store,
+    concat(sb.id, '|', sb.name) as branch,
+    new_users_at_store
+from
+    (select 
+        to_char(first_order_date, 'YYYY-MM') as order_month,
+        branch_id,
+        count(distinct user_id) as new_users_at_store
+    from 
+        (select 
+            o.user_id,
+            sb.id as branch_id,
+            min(o.actual_delivery_time at time zone gc.timezone) as first_order_date
+        from orders_order o
+            join catalog_storebranch sb on sb.id = o.store_branch_id
+            join catalog_store s on s.id = sb.store_id [[and s.id in ({{store_id}})]]
+            join geo_city gc on gc.id = sb.city_id [[and gc.id in ({{city_id}})]]
+        where 1=1
+            and o.actual_delivery_time >= {{date_from}} - interval '1 year 1 day' 
+            and o.actual_delivery_time < {{date_to}} + interval '2 day'
+            and o.actual_delivery_time at time zone gc.timezone >= {{date_from}} - interval '1 year' 
+            and o.actual_delivery_time at time zone gc.timezone < {{date_to}} + interval '1 day'
+            and o.currency = 'MXN'
+            and o.order_kind = 'NORMAL'
+            and o.status = 'DELIVERED'
+            and s.status = 'ACTIVE'
+        group by 1,2
+        ) a
+    where first_order_date >= {{date_from}}
+    group by 1,2
+    ) b
+    
+    join catalog_storebranch sb on sb.id = b.branch_id
+    join catalog_store s on s.id = sb.store_id
+    join catalog_storecollectionitem sci on sci.store_id = s.id
+    join catalog_storecollection sc on sc.id = sci.collection_id
+order by store_family, store, branch, order_month;
