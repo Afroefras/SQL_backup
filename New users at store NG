@@ -1,0 +1,45 @@
+select *,
+    s.name,
+    case 
+        when sc.id in (21,26,27,34,46) then 'Belleza, Moda & Deportes'
+        when sc.id in (11,18,24,36,38,42) then 'Celebraciones, Regalos y Tecnología'
+        when sc.id in (4,14,16,33,40) then 'Express'
+        when sc.id in (1,2,3,7,9,10,12,15,22,25,30,37,44) then 'Gourmet & Vida sana'
+        when sc.id in (5,6,17,28,32,39,41,45) then 'Mascotas, Hogar, trabajo'
+        when sc.id = 13 then 'Supermercados'
+        else 'without_family' end as store_family
+from
+    (select 
+        to_char(first_order_date at time zone gc.timezone, 'IYYYMM') as order_month,
+        store_id,
+        count(distinct user_id) as new_users_at_store
+    from 
+        (select 
+            o.user_id,
+            s.id as store_id,
+            min(o.actual_delivery_time at time zone gc.timezone) as first_order_date
+        from orders_order o
+            join catalog_storebranch sb on sb.id = o.store_branch_id
+            join geo_city gc on gc.id = sb.city_id and gc.country_id = 'MX'
+            join catalog_store s on s.id = sb.store_id
+            join catalog_storecollectionitem sci on sci.store_id = s.id
+            join catalog_storecollection sc on sc.id = sci.collection_id and sc.id <> 13
+        where 1=1
+            and o.actual_delivery_time >= {{date_from}} - interval '1 year 1 day' 
+            and o.actual_delivery_time < {{date_to}} + interval '2 day'
+            and o.actual_delivery_time at time zone gc.timezone >= {{date_from}} - interval '1 year' 
+            and o.actual_delivery_time at time zone gc.timezone < {{date_to}} + interval '1 day'
+            and o.currency = 'MXN'
+            and o.order_kind = 'NORMAL'
+            and o.status = 'DELIVERED'
+            and s.status = 'ACTIVE'
+        group by 1,2
+        ) a
+    where first_order_date >= {{date_from}}
+    group by 1,2
+    ) b
+    
+    join catalog_store s on s.id = b.store_id
+    join catalog_storecollectionitem sci on sci.store_id = s.id
+    join catalog_storecollection sc on sc.id = sci.collection_id
+;
