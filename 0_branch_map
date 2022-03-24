@@ -1,13 +1,17 @@
 select 
+    concat(gc.code, '|', gc.name) as city,
     concat(s.id, '|', s.name) as store,
     concat(sb.id, '|', sb.name) as branch,
     sb.lng, 
     sb.lat,
-    sbp.parameter,
-    sbp.value as parameter_value
-from catalog_storebranch sb 
-    join catalog_store s on s.id = sb.store_id and sb.active
-    left join catalog_storebranchparameter sbp on sbp.branch_id = sb.id 
-where 1=1 
-    and sb.id in ({{branch_id}})
-    and sbp.parameter in ('branch_area_radius_in_meters','MAX_LINEAR_DISTANCE_FROM_CUSTOMER_TO_BRANCH','feasibility_threshold')
+    case 
+        when sbp.id is not null then 'branch_level'
+        when sp.id is not null then 'store_level'
+        else 'no_info' end as area_level,
+    coalesce(sbp.value,sp.value) as area_radius_in_meters
+from catalog_store s
+    join catalog_storebranch sb on sb.store_id = s.id and sb.id in ({{branch_id}}) and sb.active
+    join geo_city gc on gc.id = sb.city_id and gc.country_id = 'MX'
+    left join catalog_storebranchparameter sbp on sbp.branch_id = sb.id and sbp.parameter = 'branch_area_radius_in_meters'
+    left join catalog_storeparameter sp on sp.store_id = s.id and sp.parameter = 'branch_area_radius_in_meters'
+    
