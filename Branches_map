@@ -1,0 +1,18 @@
+select 
+    concat(gc.code, '|', gc.name) as city,
+    concat(s.id, '|', s.name) as store,
+    concat(sb.id, '|', sb.name) as branch,
+    case 
+        when sbp.id is not null then 'branch_level'
+        when sp.id is not null then 'store_level'
+        else 'no_info' end as area_level,
+    coalesce(sbp.value,sp.value)::numeric/1000 as radius_km,
+    ST_AsText(ST_MakePoint(sb.lng,sb.lat)) as coordinates,
+    ST_AsText(ST_Buffer(ST_MakePoint(sb.lng,sb.lat), coalesce(sbp.value,sp.value)::numeric/105000)) as actual_area, --1 M = 1/105000
+    ST_AsText(ST_Buffer(ST_MakePoint(sb.lng,sb.lat), {{new_radius_km}}::numeric/105)) as new_area_{{new_radius_km}}km -- 1 KM = 1/105
+from catalog_store s
+    join catalog_storebranch sb on sb.store_id = s.id and sb.id in ({{branch_id}}) and sb.active
+    join geo_city gc on gc.id = sb.city_id and gc.country_id = 'MX'
+    left join catalog_storebranchparameter sbp on sbp.branch_id = sb.id and sbp.parameter = 'branch_area_radius_in_meters'
+    left join catalog_storeparameter sp on sp.store_id = s.id and sp.parameter = 'branch_area_radius_in_meters'
+    
