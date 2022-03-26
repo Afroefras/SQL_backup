@@ -1,22 +1,38 @@
-select 
-    distinct o.id as order_id,
-    date_trunc('day', o.actual_delivery_time at time zone gc.timezone) as order_date,
-    concat(gc.code, '|', gc.name) as city,
-    concat(s.id, '|', s.name) as store,
-    concat(sb.id, '|', sb.name) as branch,
-    ST_Contains(ST_Buffer(ST_MakePoint(sb.lng, sb.lat), {{radius_km}}::numeric/105),ST_MakePoint(oa.lng, oa.lat)) as is_within_{{radius_km}}km,
-    ST_MakePoint(sb.lng, oa.lat) as branch_coordinates,
-    ST_Buffer(ST_MakePoint(sb.lng, sb.lat), {{radius_km}}::numeric/105) as area_{{radius_km}}km -- 1 KM = 1/105
-from orders_order o
-    join catalog_storebranch sb on sb.id = o.shopper_store_branch_id and sb.id in ({{branch_id}})
-    join geo_city gc on gc.id = sb.city_id and gc.country_id = 'MX'
-    join catalog_store s on s.id = sb.store_id
-    join orders_orderaddress oa on oa.order_id = o.id
-where 1=1
-    and o.actual_delivery_time >= {{date_from}} - interval '1 day' 
-    and o.actual_delivery_time < {{date_to}} + interval '2 day'
-    and o.actual_delivery_time at time zone gc.timezone >= {{date_from}} 
-    and o.actual_delivery_time at time zone gc.timezone < {{date_to}} + interval '1 day'
-    and o.currency = 'MXN'
-    and o.order_kind = 'NORMAL'
-    and o.status = 'DELIVERED'
+select *,
+    total_sales*1.00 / total_orders as total_ticket,
+    sales_within_{{radius_km}}km*1.00 / orders_within_{{radius_km}}km as ticket_within_{{radius_km}}km
+from
+    (select
+        order_date,
+        city,
+        store,
+        branch,
+        count(distinct order_id) as total_orders,
+        count(distinct order_id) filter (where is_within_{{radius_km}}km) as orders_within_{{radius_km}}km,
+        sum(total_receipt) as total_sales,
+        sum(total_receipt) filter (where is_within_{{radius_km}}km) as sales_within_{{radius_km}}km
+    from
+        (select 
+            distinct o.id as order_id,
+            o.total_receipt,
+            date_trunc('day', o.actual_delivery_time at time zone gc.timezone) as order_date,
+            concat(gc.code, '|', gc.name) as city,
+            concat(s.id, '|', s.name) as store,
+            concat(sb.id, '|', sb.name) as branch,
+            ST_Contains(ST_Buffer(ST_MakePoint(sb.lng, sb.lat), {{radius_km}}::numeric/105), ST_MakePoint(oa.lng, oa.lat)) as is_within_{{radius_km}}km
+        from orders_order o
+            join catalog_storebranch sb on sb.id = o.shopper_store_branch_id and sb.id in ({{branch_id}})
+            join geo_city gc on gc.id = sb.city_id and gc.country_id = 'MX'
+            join catalog_store s on s.id = sb.store_id
+            join orders_orderaddress oa on oa.order_id = o.id
+        where 1=1
+            and o.actual_delivery_time >= {{date_from}} - interval '1 day' 
+            and o.actual_delivery_time < {{date_to}} + interval '2 day'
+            and o.actual_delivery_time at time zone gc.timezone >= {{date_from}} 
+            and o.actual_delivery_time at time zone gc.timezone < {{date_to}} + interval '1 day'
+            and o.currency = 'MXN'
+            and o.order_kind = 'NORMAL'
+            and o.status = 'DELIVERED'
+        ) a
+    group by 1,2,3,4
+    ) b;
