@@ -1,0 +1,26 @@
+--"role":\s"customer"(?:(?!shopper).)*"message":\s"(.+?)"
+select
+    distinct o.id as order_id,
+    date_trunc('day', o.actual_delivery_time at time zone gc.timezone) as date,
+    concat(gc.code, '|', gc.name) as city,
+    concat(s.id, '|', s.name) as store,
+    concat(sb.id, '|', sb.name) as branch,
+    o.user_id,
+    cm.messages
+from orders_order o
+    join orders_ordermetadata as om on om.order_id = o.id and om.key = 'no_bags_message_sent'
+    join catalog_storebranch sb on sb.id = o.shopper_store_branch_id
+    join geo_city gc on gc.id = sb.city_id
+    join catalog_store s on s.id = sb.store_id
+    join shoppers_shopper sh on sh.user_id = o.shopper_delivery_id
+    join inventory_inventoryowner iio on iio.object_id = sh.user_id and iio.content_type_id = 38  --SHOPPERS
+    join inventory_inventorysummary iis on iis.owner_id = iio.id and iis.asset_id = 3441 --MATERIAL PARA PROYECTO SIN BOLSA
+    join messaging_chatmessages cm on cm.order_uuid = o.uuid
+where 1=1
+    and o.actual_delivery_time >= {{date_from}} - interval '1 day' 
+    and o.actual_delivery_time < {{date_to}} + interval '2 day'
+    and o.actual_delivery_time at time zone gc.timezone >= {{date_from}} 
+    and o.actual_delivery_time at time zone gc.timezone < {{date_to}} + interval '1 day'
+    and o.currency = 'MXN'
+    and o.order_kind = 'NORMAL'
+    and o.status = 'DELIVERED'
