@@ -1,0 +1,22 @@
+select 
+    distinct o.id as order_id,
+    o.external_id,
+    o.shopper_store_branch_id as branch_id,
+    o.shopper_picking_id,
+    o.shopper_delivery_id,
+    o.actual_delivery_time at time zone gc.timezone as order_date,
+    oor.rating,
+    coalesce(oor.reason||': ', '')||oor.comment as rating_comment
+from orders_order o
+    join orders_orderrate oor on oor.order_id = o.id and oor.rate_type = 'CUSTOMER' --and oor.rating < 5
+    join geo_city gc on gc.id = o.customer_city_id
+where 1=1
+    and o.shopper_store_branch_id in ({{branch_id}})
+    and o.actual_delivery_time >= {{date_from}} - interval '1 day' 
+    and o.actual_delivery_time < {{date_to}} + interval '2 day'
+    and o.actual_delivery_time at time zone gc.timezone >= {{date_from}} 
+    and o.actual_delivery_time at time zone gc.timezone < {{date_to}} + interval '1 day'
+    and o.currency = 'MXN'
+    and o.order_kind = 'NORMAL'
+    and o.status = 'DELIVERED'
+order by order_date desc;
