@@ -1,0 +1,36 @@
+with active_products as (
+    select 
+        sb.store_id,
+        pb.product_id, 
+        pb.branch_id,
+        pb.branch_price
+    from catalog_productbranch pb 
+        join catalog_storebranch sb on sb.id=pb.branch_id and sb.store_id={{store_id}} and pb.active and sb.active
+)
+
+select 
+    ap.store_id,
+    s.name as store,
+    cc.name as parent_category, 
+    c.id as category_id, 
+    c.name as category,
+    b.name as brand,
+    ap.product_id,
+    p.name as product_name,
+    p.is_active, p.package, 
+    p.barcodes,
+    ps."SKU",
+    p.popularity,
+    p._img_url,
+    p.buy_unit,
+    mode() within group (order by branch_price) mode_price
+from active_products ap
+    join catalog_product p on ap.product_id = p.id and p.is_active
+    join catalog_store s on s.id = ap.store_id
+    join catalog_category c on c.id = p.category_id
+    left join catalog_category cc on cc.id = c.parent_id
+    left join catalog_brand b on b.id = p.brand_id
+    left join catalog_productstore ps on ps.product_id = p.id and ps.store_id = s.id
+group by 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
+order by 3,6;
+
