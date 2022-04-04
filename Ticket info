@@ -1,0 +1,30 @@
+select * from (
+    select 
+        o.created at time zone sb.timezone as actual_creation_time,
+        o.actual_delivery_time at time zone sb.timezone as actual_delivery_time,
+        o.external_id, 
+        ror.uuid, 
+        ror.amount, 
+        ror.consolidated, 
+        ror.valid::text,
+        o.order_kind, 
+        o.status,
+        o.shopper_store_branch_id as branch_id, 
+        sb.name as branch_name,
+        sb.store_id, 
+        g.value as ticket_number,
+        ror.image_url
+    from receipts_orderreceipt ror
+        join orders_order o on ror.order_id = o.id and o.currency='MXN' 
+        join catalog_storebranch sb on sb.id = o.shopper_store_branch_id and sb.store_id={{store_id}}
+        join consolidator_goal g on ror.id = g.target_id and g.target_content_type_id = 120 and g.check_type_id in (Select check_type_id from consolidator_storechecktype where store_id={{store_id}})
+    where 1=1
+        and o.actual_delivery_time >= {{date_from}} -interval '1 day'
+        and o.actual_delivery_time < {{date_to}} + interval '2 day'
+        and o.actual_delivery_time at time zone sb.timezone>= {{date_from}}
+        and o.actual_delivery_time at time zone sb.timezone< {{date_to}} + interval '1 day'
+    order by 2
+    ) as t1
+where 1=1
+[[and t1.valid in ({{valid}})]]
+[[and t1.external_id in ({{external_id}})]]
