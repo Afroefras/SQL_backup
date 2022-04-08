@@ -1,0 +1,42 @@
+with lsm_data as (
+    select
+        o.id as order_id,
+        o.external_id,
+        o.user_id,
+        o.total_receipt
+    from orders_order o
+        join catalog_storebranch sb on sb.id = o.shopper_store_branch_id
+        join catalog_store s on s.id = sb.store_id and s.id = 7
+        join geo_city gc on gc.id = o.customer_city_id
+    where 1=1
+        and o.actual_delivery_time >= current_date - interval '6 months 1 day'
+        and o.actual_delivery_time < current_date - interval '31 days'
+        and o.actual_delivery_time at time zone gc.timezone >= current_date - interval '6 months'
+        and o.actual_delivery_time at time zone gc.timezone < current_date - interval '30 days'
+        and o.currency = 'MXN'
+        and o.order_kind = 'NORMAL'
+        and o.status = 'DELIVERED'
+    ),
+    
+    lm_data as (
+    select distinct user_id
+    from orders_order o
+        join catalog_storebranch sb on sb.id = o.shopper_store_branch_id
+        join catalog_store s on s.id = sb.store_id and s.id = 7
+        join geo_city gc on gc.id = o.customer_city_id
+    where 1=1
+        and o.actual_delivery_time >= current_date - interval '1 month 1 day'
+        and o.actual_delivery_time < current_date
+        and o.actual_delivery_time at time zone gc.timezone >= current_date - interval '1 month'
+        and o.actual_delivery_time at time zone gc.timezone < current_date
+        and o.currency = 'MXN'
+        and o.order_kind = 'NORMAL'
+        and o.status = 'DELIVERED'   
+    )
+    
+    
+select 
+    lsm.*
+from lsm_data lsm
+    left join lm_data lm using (user_id)
+where lm.user_id is null
