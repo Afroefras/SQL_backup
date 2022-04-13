@@ -1,0 +1,20 @@
+select
+    distinct o.id as order_id,
+    o.external_id,
+    o.user_id,
+    o.actual_delivery_time at time zone gc.timezone as order_date,
+    o.total_receipt
+from orders_order o
+    join crm_users_view u on u.id = o.user_id
+    join payments_ordergrouppayment gp on gp.order_group_id = o.order_group_id and gp.user_uuid = u.uuid
+    join payments_stripemethod sm on sm.paymentmethod_ptr_id = gp.payment_method_id and sm.first6 = '471239'
+    join geo_city gc on gc.id = o.customer_city_id
+where 1=1
+    and o.shopper_store_branch_id in (993,2677,11754,497,847,1910,1912,1914,992,11755,2616,496,3140,15737,403,35393,461,463,3104,460,173,290,462,459,498,495,457,138,2674,139,428,335,1915,1445,1909,165,850,25576,1911,4990,11758,849,26722,146,326,3105,2612,25961,136,3110,15750,11757,15738,25575,20638,36552,3108,11756,137,25770,25769,26729,3087,26724,3109,848,359,287)
+    and o.actual_delivery_time >= current_date - interval '6 months 1 day'
+    and o.actual_delivery_time < current_date - interval '31 days'
+    and o.actual_delivery_time at time zone gc.timezone >= current_date - interval '6 months'
+    and o.actual_delivery_time at time zone gc.timezone < current_date - interval '30 days'
+    and o.currency = 'MXN'
+    and o.order_kind = 'NORMAL'
+    and o.status = 'DELIVERED'
