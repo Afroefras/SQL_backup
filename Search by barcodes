@@ -9,16 +9,13 @@ with filter_products as (
             and p.currency = 'MXN'
             and p.is_active
         ) a
-    where barcodes in 
-        (
-        '7501094913243'
-        )
+    where barcodes in ({{barcodes}})
     )
     
 select
+    fp.barcodes,
     concat(s.id, '|', s.name) as store,
     concat(p.id, '|', p.name, ' ', p.package) as product,
-    p.barcodes,
     concat(b.id, '|', b.name) as brand,
     concat(c.id, '|', c.name) as category
 from filter_products fp
