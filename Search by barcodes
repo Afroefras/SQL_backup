@@ -1,0 +1,29 @@
+with filter_products as (
+    select *
+    from
+        (select 
+            p.id as product_id,
+            unnest(p.barcodes) as barcodes
+        from catalog_product p
+        where 1=1
+            and p.currency = 'MXN'
+            and p.is_active
+        ) a
+    where barcodes in 
+        (
+        '7501094913243'
+        )
+    )
+    
+select
+    concat(s.id, '|', s.name) as store,
+    concat(p.id, '|', p.name, ' ', p.package) as product,
+    p.barcodes,
+    concat(b.id, '|', b.name) as brand,
+    concat(c.id, '|', c.name) as category
+from filter_products fp
+    join catalog_productstore ps using(product_id)
+    join catalog_store s on s.id = ps.store_id
+    join catalog_product p on p.id = fp.product_id
+    join catalog_brand b on b.id = p.brand_id
+    join catalog_category c on c.id = p.category_id
