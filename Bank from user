@@ -1,0 +1,12 @@
+select 
+    distinct u.id as user_id,
+    u.email,
+    gp.payment_method_id,
+    sm.paymentmethod_ptr_id,
+    sm.first6,
+    sm.last4
+from crm_users_view u
+    join payments_ordergrouppayment gp on gp.user_uuid = u.uuid
+    join payments_stripemethod sm on sm.paymentmethod_ptr_id = gp.payment_method_id
+where sm.first6 = '471239'
+limit 2
