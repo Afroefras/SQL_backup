@@ -1,0 +1,95 @@
+with orders_data as (
+    select 
+        o.id,
+        date_trunc('week', o.actual_delivery_time at time zone gc.timezone) as order_week,
+        extract(epoch from o.actual_delivery_time - o.promised_delivery_time) / 60 as late_mins
+    from orders_order o
+        join geo_city gc on gc.id = o.customer_city_id and gc.country_id = 'MX'
+    where 1=1
+        and gc.id = {{city_id}}
+        and o.shopper_store_branch_id in ({{branch_id}})
+        and o.actual_delivery_time >= {{date_from}} - interval '1 day' 
+        and o.actual_delivery_time < {{date_to}} + interval '2 day'
+        and o.actual_delivery_time at time zone gc.timezone >= {{date_from}} 
+        and o.actual_delivery_time at time zone gc.timezone < {{date_to}} + interval '1 day'
+        and o.currency = 'MXN'
+        and o.order_kind = 'NORMAL'
+        and o.status = 'DELIVERED'
+    ), 
+
+    orders_full_times as (
+    select
+        distinct on (oa.order_id, oa.status) 
+        oa.*
+    from orders_data o 
+        join orders_orderactivity oa on oa.order_id = o.id 
+    where oa.status in (
+            'PICKING_ASSIGNED',
+            'PICKING_SHOPPING',
+            'PICKING_CHECKOUT',
+            'PICKING_FINISHED',
+            'DELIVERY_ASSIGNABLE',
+            'DELIVERY_ACCEPTED',
+            'DELIVERY_WAITING_HANDOFF',
+            'DELIVERY_READY_TO_GO',
+            'DELIVERY_ON_THE_WAY',
+            'DELIVERED_ON_DESTINATION',
+            'DELIVERED'
+            )
+    ),
+
+    orders_times as (  
+    select
+        o.id as order_id,
+        extract(epoch from pick_shopping.updated - pick_assigned.created) / 60 as going_to_store,
+        extract(epoch from pick_checkout.updated - pick_shopping.created) / 60 as shopping_time,
+        extract(epoch from pick_finished.updated - pick_checkout.created) / 60 as checkout_time,
+        extract(epoch from deliv_accepted.updated - deliv_assignable.created) / 60 as looking_for_driver,
+        extract(epoch from deliv_ready_to_go.updated - deliv_waiting_handoff.created) / 60 as driver_waiting,
+        extract(epoch from coalesce(deliv_on_dest.updated, delivered.updated) - pick_shopping.created) / 60 as shopping_to_dest,
+        extract(epoch from coalesce(deliv_on_dest.updated, delivered.updated) - pick_checkout.created ) / 60 as picking_checkout_to_dest,
+        extract(epoch from coalesce(deliv_on_dest.updated, delivered.updated) - deliv_on_the_way.created) / 60 as delivery_on_dest_time,
+        extract(epoch from delivered.updated - coalesce(deliv_on_dest.created, delivered.created)) / 60 as arrival_to_delivered
+    from orders_data o
+        left join orders_full_times pick_assigned on pick_assigned.order_id = o.id and pick_assigned.status = 'PICKING_ASSIGNED'
+        left join orders_full_times pick_shopping on pick_shopping.order_id = o.id and pick_shopping.status = 'PICKING_SHOPPING'
+        left join orders_full_times pick_checkout on pick_checkout.order_id = o.id and pick_checkout.status = 'PICKING_CHECKOUT'
+        left join orders_full_times pick_finished on pick_finished.order_id = o.id and pick_finished.status = 'PICKING_FINISHED'
+        left join orders_full_times deliv_assignable on deliv_assignable.order_id = o.id and deliv_assignable.status = 'DELIVERY_ASSIGNABLE'
+        left join orders_full_times deliv_accepted on deliv_accepted.order_id = o.id and deliv_accepted.status = 'DELIVERY_ACCEPTED'
+        left join orders_full_times deliv_waiting_handoff on deliv_waiting_handoff.order_id = o.id and deliv_waiting_handoff.status = 'DELIVERY_WAITING_HANDOFF'
+        left join orders_full_times deliv_ready_to_go on deliv_ready_to_go.order_id = o.id and deliv_ready_to_go.status = 'DELIVERY_READY_TO_GO'
+        left join orders_full_times deliv_on_the_way on deliv_on_the_way.order_id = o.id and deliv_on_the_way.status = 'DELIVERY_ON_THE_WAY'
+        left join orders_full_times deliv_on_dest on deliv_on_dest.order_id = o.id and deliv_on_dest.status = 'DELIVERED_ON_DESTINATION'
+        left join orders_full_times delivered on delivered.order_id = o.id and delivered.status = 'DELIVERED'
+    ),
+
+    total_data as (
+    select o.*,
+        o.id as order_id,
+        going_to_store,
+        shopping_time,
+        checkout_time,
+        looking_for_driver,
+        driver_waiting,
+        shopping_to_dest,
+        picking_checkout_to_dest,
+        delivery_on_dest_time,
+        arrival_to_delivered
+    from orders_data o
+        left join orders_times ot on ot.order_id = o.id
+    )
+
+select 
+    order_week,
+    count(distinct order_id) as orders,
+    sum(going_to_store) as going_to_store,
+    sum(shopping_time) as shopping_time,
+    sum(checkout_time) as checkout_time,
+    sum(looking_for_driver) as looking_for_driver,
+    sum(driver_waiting) as driver_waiting,
+    sum(shopping_to_dest) as shopping_to_dest,
+    sum(picking_checkout_to_dest) as picking_checkout_to_dest,
+    sum(delivery_on_dest_time) as delivery_on_dest_time
+from total_data
+group by 1;
