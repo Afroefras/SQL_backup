@@ -1,0 +1,162 @@
+with orders_data as (
+    select
+        distinct o.id,
+        o.uuid,
+        o.external_id,
+        gc.name as city,
+        o.actual_delivery_time at time zone gc.timezone as order_date,
+        o.shopper_store_branch_id,
+        
+        --BRANCHES DE STORES EN STORE_CATEGORY = 13 SUPERMERCADOS (PORQUE CATALOGO ESTÁ EN OTRA BD)
+        case when o.shopper_store_branch_id in (
+            4447,26603,4297,4420,993,26609,1490,139,2677,4417,28152,4419,4287,11754,4454,497,2503,847,4473,1910,4432,404,2673,1912,10958,1914,289,992,16274,16276,4452,2504,504,1091,38,4295,11755,16275,15731,27168,372,4421,10015,10004,26597,4431,15732,15733,16038,26602,90,27182,138,27169,10517,92,26605,26781,26607,15736,26606,40,35869,19247,26601,26612,2616,26611,26614,9991,856,12,26613,26615,15734,433,428,26617,692,26616,26610,15735,4423,13879,9992,9995,496,3140,15737,4290,4286,3985,29392,403,26756,505,10360,288,10519,10352,38813,10354,10357,10358,10007,10356,21777,10367,26776,156,35393,9994,27171,3917,27173,9986,10511,10001,21609,193,461,9998,21783,10518,10503,9983,335,463,9996,232,202,30,384,201,615,10515,3104,19246,10502,385,10009,19241,4301,4300,460,10516,4291,730,10365,16235,58,26337,9993,10008,26336,4284,1915,26778,26338,204,373,10364,1445,173,9984,290,4377,360,462,459,198,333,194,498,195,196,495,205,54,390,1916,10366,2500,26772,4414,4415,4418,4433,4435,4430,26773,26775,4451,457,1909,2674,26779,4413,9987,10000,4424,25576,1917,10013,1911,10351,4990,10513,10512,16039,26728,11758,206,15238,4293,21772,849,26722,26725,17,405,9988,146,10005,26721,21781,3107,21782,20615,2502,2501,9989,326,19242,846,19243,19245,4307,4292,4294,2505,11077,4438,4285,26361,27305,10353,21774,3105,26362,21776,10514,26750,10955,2612,10521,21773,621,10368,10363,25961,10362,26723,27308,989,27306,21779,21778,4304,16528,27307,27309,10003,27311,26608,26618,27310,4412,10011,4422,4288,16277,4289,10951,26675,10954,10949,10957,4437,10010,28151,683,10956,10953,10014,4450,10006,136,3110,27315,27316,26339,27317,10359,15750,4426,19244,9997,9985,4302,11757,9990,458,10355,9999,4303,4281,15738,1913,10950,25575,4425,21775,20638,10520,3106,203,4472,4481,10002,3659,376,1873,15741,4305,4434,490,218,27176,217,26363,197,27170,4283,152,165,166,1176,4119,26360,89,491,36552,1182,371,200,10523,447,26358,26359,21608,3108,15742,393,27174,11756,49,4282,32493,137,392,4296,25770,25769,26964,26965,32914,27167,26753,26726,26748,26751,26729,26749,26730,26593,26731,26594,26604,26755,26595,26752,26718,26596,26754,26719,26598,26599,26720,26600,10522,27172,27175,26780,10361,27463,26777,3087,10012,26727,29370,27464,26724,4449,4416,850,29916,3109,479,13079,4306,3219,36656,848,199,10952,26774,21780,3986,359,287,26676,21771,155
+            ) then 'Groceries' else 'NonG' end as store_type,
+        
+        o.user_id as customer_id,
+        ss.user_id as shopper_id,
+        ss.completed_pickings,
+        ss.transportation = 'CAR' as has_car,
+        
+        --ES 2WHEELS O (4WHEELS CON MATERIAL)
+        ss.transportation in ('MOTORCYCLE','BIKE') or (iis.id is not null and ss.transportation = 'CAR') as is_eligible,
+        
+        om.id is not null as message_sent,
+        o.bags as total_bags,
+        o.qty_products_found+o.qty_products_replaced as n_products,
+        
+        oor.rating as order_rating,
+        oor.rating is not null as rating_is_not_null,
+        oor.rating is not null and oor.rating >= 4 as has_good_rating
+        
+    from orders_order as o
+         --CIUDADES CON PROYECTO SIN BOLSA
+        join geo_city gc on gc.id = o.customer_city_id and gc.id in (2,4,6,8,10,18)
+        join orders_orderrate oor on oor.order_id = o.id and oor.rate_type = 'CUSTOMER'
+        join shoppers_shopper ss on ss.user_id = o.shopper_delivery_id
+        --SHOPPERS
+        join inventory_inventoryowner iio on iio.object_id = ss.user_id and iio.content_type_id = 38  
+        --SE ENVÍA EL MENSAJE
+        left join orders_ordermetadata as om on om.order_id = o.id and om.key = 'no_bags_message_sent' and om.value='True'
+        --MATERIAL PARA PROYECTO SIN BOLSA
+        left join inventory_inventorysummary iis on iis.owner_id = iio.id and iis.asset_id = 3441 
+    
+    where 1=1
+        --OPTIMIZAR CONSULTA DE FECHAS
+        and o.actual_delivery_time >= {{date_from}} - interval '1 day' 
+        and o.actual_delivery_time < {{date_to}} + interval '2 day'
+        and o.actual_delivery_time at time zone gc.timezone >= {{date_from}} 
+        and o.actual_delivery_time at time zone gc.timezone < {{date_to}} + interval '1 day'
+        and o.status = 'DELIVERED'
+        and o.order_kind = 'NORMAL'
+    ),
+    
+    refund_orders as (
+    select 
+        o.id as order_id,
+        sum(case when ro.relation_type is not null then 1 else 0 end) as post_sale,
+        count(r.id) as has_refund
+    from orders_data o
+        left join payments_refund r on r.order_id = o.id
+        left join orders_relatedorder ro on ro.parent_id = o.id and ro.relation_type = 'POST_SALE'
+    group by 1
+    ),
+    
+    --HAY TIENDAS NON-GROCERIES QUE ENTREGAN BOLSAS PROPIAS
+    store_bags_orders as (
+    select
+        o.id as order_id,
+        coalesce(sum(ob.quantity), 0) as store_bags
+    from orders_data o
+        join orders_orderbag ob on ob.order_id = o.id
+        join inventory_bagconfiguration bc on bc.id = ob.bag_configuration_id and bc.type = 'store'
+    group by 1
+    ),
+    
+    --OPTIMIZAR CONSULTA DE TIEMPOS
+    orders_full_times as (
+    select distinct on (oa.order_id, oa.status) oa.*
+    from orders_data o 
+        join orders_orderactivity oa on oa.order_id = o.id 
+    where oa.status in ('PICKING_CHECKOUT','PICKING_WAITING_HANDOFF','DELIVERY_READY_TO_GO', 'DELIVERY_ON_THE_WAY','DELIVERY_ON_DESTINATION','DELIVERED')
+    ),
+      
+    --CÁLCULO DE TIEMPOS
+    orders_times as (  
+    select
+        distinct on (o.id)
+        o.id as order_id,
+        extract(epoch from pick_finished.created - pick_checkout.created) / 60 as checkout_time,
+        extract(epoch from deliv_on_the_way.created - deliv_ready_to_go.created) / 60 as deliv_setup_time,
+        extract(epoch from deliv_on_dest.created - deliv_on_the_way.created) / 60 as deliv_driving_time,
+        extract(epoch from delivered.created - deliv_on_dest.created) / 60 as deliv_dropoff_time
+    from orders_data o
+        left join orders_full_times pick_checkout on pick_checkout.order_id = o.id and pick_checkout.status = 'PICKING_CHECKOUT'
+        left join orders_full_times pick_finished on pick_finished.order_id = o.id and pick_finished.status = 'PICKING_WAITING_HANDOFF'
+        left join orders_full_times deliv_ready_to_go on deliv_ready_to_go.order_id = o.id and deliv_ready_to_go.status = 'DELIVERY_READY_TO_GO'
+        left join orders_full_times deliv_on_the_way on deliv_on_the_way.order_id = o.id and deliv_on_the_way.status = 'DELIVERY_ON_THE_WAY'
+        left join orders_full_times deliv_on_dest on deliv_on_dest.order_id = o.id and deliv_on_dest.status = 'DELIVERY_ON_DESTINATION'
+        left join orders_full_times delivered on delivered.order_id = o.id and delivered.status = 'DELIVERED'
+    ),
+    
+    --EL CLIENTE CONTESTA, PUEDE NO SER RELACIONADO CON LA PREGUNTA "SIN BOLSA?"
+    --ES UNA CTE COSTOSA, DADO QUE CONVIERTE EL JSON A TEXTO Y BUSCA EL ROL "CUSTOMER"
+    orders_chat as (
+    select
+        o.id as order_id,
+        true as customer_replied
+    from orders_data o
+        join messaging_chatmessages cm on cm.order_uuid = o.uuid
+    where cm.messages::text ilike '%customer%'
+    ),
+    
+    --UNIÓN DE TODAS LAS CTE PARA TENER UNA CTE BASE A NIVEL ORDEN
+    total_data as (
+    select o.*,
+        --TIEMPOS
+        ot.checkout_time,
+        ot.deliv_setup_time,
+        ot.deliv_driving_time,
+        ot.deliv_dropoff_time,
+        
+        --VARIABLES DESDE OTRAS CTE
+        coalesce(sbo.store_bags, 0) as store_bags,
+        ro.order_id is not null as post_sale_refund,
+        oc.order_id is not null as customer_replied,
+        o.total_bags - coalesce(sbo.store_bags, 0) as cornershop_bags,
+
+        --TAMAÑO DE PEDIDO SEGÚN # PRODUCTOS
+        case
+            when o.n_products < 6 then 'XS'
+            when o.n_products between 6 and 10 then 'S'
+            when o.n_products between 10 and 30 then 'M'
+            when o.n_products between 30 and 50 then 'L'
+            when o.n_products > 50 then 'XL' end as order_size,
+        --STATUS DE LA ORDEN SEGÚN PASOS PARA ENTREGAR SIN BOLSA
+        case 
+            when o.is_eligible and o.message_sent and oc.customer_replied and o.total_bags - coalesce(sbo.store_bags, 0) <= 0 then 'SUCCESS'
+            when o.is_eligible and o.message_sent and oc.customer_replied and not o.total_bags - coalesce(sbo.store_bags, 0) <= 0 then 'FAIL'
+            when o.is_eligible and o.message_sent and oc.customer_replied is null and o.total_bags - coalesce(sbo.store_bags, 0) <= 0 then 'FORCED'
+            when o.is_eligible and o.message_sent and oc.customer_replied is null and not o.total_bags - coalesce(sbo.store_bags, 0) <= 0 then 'NO REPLY'
+            when o.is_eligible and not o.message_sent then 'MESSAGE ERROR'
+            when not o.is_eligible and o.message_sent then 'MESSAGE ERROR'
+            when not o.is_eligible and not o.message_sent and o.total_bags - coalesce(sbo.store_bags, 0) <= 0 then 'APP ERROR'
+            when not o.is_eligible and not o.message_sent and not o.total_bags - coalesce(sbo.store_bags, 0) <= 0 then 'NOT ELEGIBLE' 
+            else '?' end as no_bags_status,
+        --EXPERIENCIA DEL SHOPPER
+        case 
+            when o.completed_pickings <= 10 then '1-10'
+            when o.completed_pickings between 11 and 30 then '11 - 30'
+            when o.completed_pickings between 31 and 50 then '31 - 50'
+            when o.completed_pickings between 51 and 100 then '51 - 100'
+            when o.completed_pickings between 101 and 200 then '101 - 200'
+            when o.completed_pickings > 200 then '200+' end as picking_experience
+    from orders_data o
+        left join store_bags_orders sbo on sbo.order_id = o.id
+        left join refund_orders ro on ro.order_id = o.id and ro.post_sale + has_refund > 0
+        left join orders_times ot on ot.order_id = o.id
+        left join orders_chat oc on oc.order_id = o.id
+    )
+
+--AHORA SÍ, SE TRABAJA SOBRE LA ÚLTIMA CTE (A NIVEL ORDEN) CON TODAS LAS VARIABLES DE INTERÉS
+SELECT *
+FROM total_data
