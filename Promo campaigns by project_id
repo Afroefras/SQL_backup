@@ -1,0 +1,3 @@
+select string_agg(distinct component_id::text, ', ') as campaings
+from promotions_promotionalprojectcomponent
+where promotional_project_id = 33038
