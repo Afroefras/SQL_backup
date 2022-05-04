@@ -1,0 +1,29 @@
+select 
+    concat(s.id, '|', s.name) as store,
+    concat(sb.id, '|', sb.name) as branch,
+    p.id as product_id,
+    p.name as product,
+    p._img_url,
+    p.description,
+    p.package,
+    b.id as brand_id,
+    b.name as brand,
+    c.id as category_id,
+    c.name as category,
+    ps."SKU",
+    p.barcodes,
+    ps.*
+from catalog_productbranch pb
+    join catalog_product p on p.id = pb.product_id
+    join catalog_brand b on b.id = p.brand_id
+    join catalog_category c on c.id = p.category_id
+    join catalog_storebranch sb on sb.id = pb.branch_id and sb.id = {{branch_id}}
+    join catalog_store s on s.id = sb.store_id
+    join catalog_productstore ps on ps.product_id = p.id and ps.store_id = s.id
+where 1=1
+    and p.is_active
+    and p.currency = 'MXN'
+    and ps.status = 'ACTIVE'
+    and pb.active
+    and s.status = 'ACTIVE'
+    and sb.active
