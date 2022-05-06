@@ -1,16 +1,13 @@
 select 
-    concat(u.id, '|', user.email ) as "user_id|user_email",
+    concat(u.id, '|', u.email) as "user_id|user_email",
     coalesce(count(distinct m.identifier),0) as n_memberships,
     count(distinct o.id) as orders
 from orders_order o 
-    join catalog_storebranch sb on sb.id = o.store_branch_id
-    join catalog_store s on s.id = sb.store_id
-    join geo_city gc on gc.id = sb.city_id
+    join geo_city gc on gc.id = o.customer_city_id
     join crm_users_view u on u.id = o.user_id
-    left join loyalty_planmembership m on m.user_uuid = u.uuid
+    join loyalty_planmembership m on m.user_uuid = u.uuid and m.plan_uuid = '78aad4e8-955c-40c4-a62f-696acace85b0'
 where 1=1
-    and s.id in (9,45,1423,1424,4785)
-    and (m.plan_uuid is null or m.plan_uuid = '38d82ad3-e9fb-4857-bbc7-72ffb327af4a')
+    and o.shopper_store_branch_id in (11754,11755,11756,11757,11758,136,137,138,139,1445,146,15737,15738,15750,165,173,1909,1910,1911,1912,1913,1914,1915,1916,1917,20615,20638,2500,2501,2502,2503,2504,2505,25575,25576,25769,25770,25961,2612,2616,26718,26719,26720,26721,26722,26723,26724,26725,26726,26727,26728,26729,2673,26730,26731,2674,2677,287,288,289,290,3087,3104,3105,3106,3107,3108,3109,3110,3140,326,335,35393,359,36552,372,373,403,404,405,428,457,458,459,460,461,462,463,495,496,497,498,4990,846,847,848,849,850,856,992,993)
     and o.actual_delivery_time >= {{date_from}} - interval '1 day' 
     and o.actual_delivery_time < {{date_to}} + interval '2 day'
     and o.actual_delivery_time at time zone gc.timezone >= {{date_from}} 
