@@ -1,0 +1,46 @@
+select 
+    sampling.city,
+    total.total_orders,
+    sampling.sampling_orders,
+    round(sampling.sampling_orders*100.00 / total.total_orders, 1)||'%' as "%_sampling_orders",
+    total.total_products,
+    sampling.sampling_products,
+    round(sampling.sampling_products*100.00 / total.total_products, 1)||'%' as "%_sampling_qty"
+from 
+    (select
+        concat(gc.code, '|', gc.name) as city,
+        sum(sd.delivered_quantity) as sampling_products,
+        count(distinct o.id) as sampling_orders
+    from inventory_sampling_campaigndelivery sd
+    	join orders_order o on o.uuid = sd.order_uuid
+        join geo_city gc on gc.id = o.customer_city_id and gc.country_id = 'MX'
+    where 1=1
+        and o.actual_delivery_time >= {{date_from}} - interval '1 day' 
+        and o.actual_delivery_time < {{date_to}} + interval '2 day'
+        and o.actual_delivery_time at time zone gc.timezone >= {{date_from}} 
+        and o.actual_delivery_time at time zone gc.timezone < {{date_to}} + interval '1 day'
+        and o.currency = 'MXN'
+        and o.order_kind = 'NORMAL'
+        and o.status = 'DELIVERED'
+        and sd.status = 'DELIVERED'
+    group by 1
+    ) sampling
+    
+    join 
+        (select
+            concat(gc.code, '|', gc.name) as city,
+            round(count(distinct o.id),0) as total_orders,
+            sum(o.qty_products_found+o.qty_products_replaced) as total_products
+        from orders_order o
+            join geo_city gc on gc.id = o.customer_city_id and gc.country_id = 'MX'
+        where 1=1
+            and o.actual_delivery_time >= {{date_from}} - interval '1 day' 
+            and o.actual_delivery_time < {{date_to}} + interval '2 day'
+            and o.actual_delivery_time at time zone gc.timezone >= {{date_from}} 
+            and o.actual_delivery_time at time zone gc.timezone < {{date_to}} + interval '1 day'
+            and o.currency = 'MXN'
+            and o.order_kind = 'NORMAL'
+            and o.status = 'DELIVERED'
+        group by 1
+        ) total using (city)
+order by city;
