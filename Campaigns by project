@@ -1,0 +1,8 @@
+select string_agg(distinct c.id::text ,', ')
+from promotions_promotionalprojectcomponent ppc
+    join promotions_promotionalproject pp on pp.id = ppc.promotional_project_id
+    join promotions_campaign c on c.id=ppc.component_id
+where 1=1
+    and pp.id in ({{project_id}})
+    [[and c.id in ({{campaign_id}})]]
+    and c.country = 'MX'
