@@ -1,0 +1,19 @@
+select 
+    c.id as category_id,
+    cl.name as category_name,
+    c.name as category_name_es,
+    b.id as brands_id,
+    b.name as brand,
+    p.id as product_id,
+    p.name as product,
+    p.package,
+    p.barcodes
+from catalog_product p 
+    join catalog_brand b on b.id = p.brand_id and b.id in ({{brand_id}})
+    join catalog_productcategorization pc on pc.product_id = p.id
+    join catalog_category c on c.id = pc.category_id
+    join catalog_categorylocalization cl on cl.category_id = c.id
+where 1=1
+    and p.currency = 'MXN'
+    and cl.language = 'en'
+    and p.is_active
