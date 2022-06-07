@@ -1,0 +1,18 @@
+select  
+    u.email,
+    u.id as user_id,
+    rc.code,
+    count(distinct o.id) as orders,
+    sum(cd.balance) as credits_balance
+from payments_redeemcode rc
+    join payments_creditsdeposit cd on cd.reason_id=rc.reason_id and cd.reference_id=rc.id
+    join payments_paymentmethod pp on pp.id = cd.wallet_id
+    join crm_users_view u on u.id = pp.user_id
+    left join payments_creditspartialcharge part on part.deposit_id = cd.id
+    left join payments_ordergrouppayment ogp on (ogp.external_charge_id = part.transaction_id::text and ogp.payment_method_id = cd.wallet_id)
+    left join orders_order o on o.order_group_id = ogp.order_group_id
+where 1=1
+    and rc.code in ('HOT300','MICHEDRAUI300')
+    and o.id is null
+    and rc.currency = 'MXN'
+group by 1,2,3;
