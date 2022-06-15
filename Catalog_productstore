@@ -1,0 +1,26 @@
+select
+    concat(s.id, '|', s.name) as store,
+    concat(b.id, '|', b.name) as brand,
+    concat(ca.id, '|', ca.name) as category,
+    p.id as product_id,
+    ps."SKU",
+    p.barcodes,
+    p.name as product_name,
+    p.description,
+    p."_img_url",
+    p."buy_unit",
+    p.weight
+from catalog_store s 
+    join catalog_productstore ps on ps.store_id = s.id
+    join catalog_product p on p.id = ps.product_id
+    left join catalog_brand b on p.brand_id = b.id
+    join catalog_category ca on ca.id = p.category_id
+where 1=1 
+    [[and p.id in ({{product_id}})]]
+    [[and sb.id in ({{branch_id}})]]
+    [[and s.id in ({{store_id}})]]
+    [[and s.name in ({{store_name}})]]
+    and p.currency = 'MXN'
+    and p.is_active
+    and s.status = 'ACTIVE'
+    and ps.status = 'ACTIVE'
