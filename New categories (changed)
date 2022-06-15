@@ -1,0 +1,13 @@
+select
+    c.id as category_id,
+    c.name as category,
+    count(distinct p.id) as products,
+    count(distinct b.id) as brands
+from catalog_product p 
+    join catalog_brand b on b.id = p.brand_id
+    join catalog_category c on c.id = p.category_id
+where b.id in (1116,13488,14844,152123,1570,18340,24949,38,3988,4067,4127,4252,5410)
+    and p.is_active
+    and c.id > 1700
+group by 1,2
+order by products desc;
