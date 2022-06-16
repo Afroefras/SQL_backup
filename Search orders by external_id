@@ -1,0 +1,22 @@
+select 
+    date_trunc('day', o.actual_delivery_time at time zone gc.timezone) as order_date,
+    o.id as order_id,
+    o.external_id,
+    o.shopper_store_branch_id as branch_id,
+    o.user_id,
+    o.total_receipt,
+    o.qty_products_ordered,
+    o.qty_products_found,
+    o.qty_products_replaced
+from orders_order o
+    join geo_city gc on gc.id = o.customer_city_id
+    join crm_users_view u on u.id = o.user_id
+where 1=1
+    and o.external_id in (
+    'MX-001613-0311616',
+    'MX-002251-3537192',
+    'MX-004225-6999712'
+    )
+    and o.currency = 'MXN'
+    and o.order_kind = 'NORMAL'
+    and o.status = 'DELIVERED'
