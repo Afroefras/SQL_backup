@@ -1,0 +1,71 @@
+with orders_data as (
+    select 
+        o.id,
+        o.actual_delivery_time as order_date_utc,
+        date_trunc('day', o.actual_delivery_time at time zone gc.timezone) as order_date_local,
+        o.shopper_picking_id as shopper_id,
+        concat(gc.code, '|', gc.name) as city
+    from orders_order o
+        join orders_ordermetadata om on o.id = om.order_id
+        join geo_city gc on gc.id = o.customer_city_id
+        left join orders_orderactivity oa on o.id = oa.order_id and oa.status = 'PICKING_ACCEPTED'
+    where 1=1
+        and om.key = 'is_multipicking_parent_for_order'
+        and gc.id = {{city_id}}
+        and o.actual_delivery_time >= {{date_from}} - interval '1 day' 
+        and o.actual_delivery_time < {{date_to}} + interval '2 day'
+        and o.actual_delivery_time at time zone gc.timezone >= {{date_from}} 
+        and o.actual_delivery_time at time zone gc.timezone < {{date_to}} + interval '1 day'
+        and o.order_kind = 'NORMAL'
+        and o.status = 'DELIVERED'
+        and o.shopper_picking_id = o.shopper_delivery_id
+    ),
+
+    shoppers_data as (
+    select
+        ssc.shopper_id,
+        ssc.reference_id as order_id,
+        sum(ssc.amount) as amount
+    from orders_data o
+        join shoppers_shoppercommission ssc on ssc.reference_id = o.id
+        join shoppers_shopper sh on sh.user_id = ssc.shopper_id and sh.user_id = o.shopper_id
+        join shoppers_shoppercommissionplan scp on scp.shopper_id = sh.user_id
+    where 1=1
+        and scp.commission_plan_id = 148
+        and ssc.commission_type in ('PICKING','DELIVERY')
+    group by 1,2
+    ),
+
+    orders_full_times as (
+    select
+        distinct on (oa.order_id, oa.status) 
+        oa.*
+    from orders_data o 
+        join orders_orderactivity oa on oa.order_id = o.id 
+    where oa.status = 'PICKING_ACCEPTED'
+    ),
+
+    total_data as (
+    select o.*,
+        o.id as order_id,
+        sd.amount,
+        extract(epoch from o.order_date_utc - ot.created) / (60*60) as order_duration_hours 
+    from orders_data o
+        join shoppers_data sd on sd.order_id = o.id
+        join orders_full_times ot on ot.order_id = o.id
+    )
+
+select *,
+    total_amount / total_worked_hours as "EPWH",
+    total_amount / total_orders as "EPO"
+from 
+    (select
+        order_date_local,
+        city,
+        count(distinct order_id) as total_orders,
+        count(distinct shopper_id) as total_shoppers,
+        sum(amount) as total_amount,
+        sum(order_duration_hours) as total_worked_hours
+    from total_data
+    group by 1,2
+    ) a;
