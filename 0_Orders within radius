@@ -1,0 +1,16 @@
+select
+    ST_Intersects(ST_Buffer(ST_StartPoint(orr.path), {{new_radius_km}}::numeric/105), ST_EndPoint(orr.path)) as in_area,
+    count(distinct o.id) as orders
+from orders_order o 
+    join geo_city as gc on gc.id = o.customer_city_id and gc.country_id = 'MX'
+    join orders_orderroute orr on orr.order_id = o.id and orr.delivery_status = 'DELIVERY_ON_DESTINATION'
+where 1=1
+    and o.shopper_store_branch_id in (13794,13796,13797,13798,16064,20363,30717,36287,36288,36289,36290,36291,36292,36419,36420,36421,36422,36423,36424,36425,36426,36427,36428,36433,36434,36435,36436,36452,36453,36454,36455,36456,36457,36458,36459,36460,36461,36462,36463,36464,36465,36466,36467,36468,36469,36470,36471,36472,36473,36474,36475,36476,36477,36478,36479,36480,36481,36482,36483,36484,36485,36486,36487,36488,36489,36490,36491,36492,36493,36756)
+    and o.actual_delivery_time >= {{desde}} - interval '1 day' 
+    and o.actual_delivery_time < {{hasta}} + interval '2 day'
+    and o.actual_delivery_time at time zone gc.timezone >= {{desde}}
+    and o.actual_delivery_time at time zone gc.timezone < {{hasta}} + interval '1 day'
+    and o.currency = 'MXN'
+    and o.status= 'DELIVERED' 
+    and o.order_kind='NORMAL'
+group by 1;
