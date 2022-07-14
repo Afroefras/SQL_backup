@@ -1,0 +1,18 @@
+select 
+    date_trunc('minute', o.actual_delivery_time at time zone gc.timezone) as order_datetime,
+    o.shopper_store_branch_id as branch_id,
+    o.shopper_total_receipt,
+    o.external_id as external_id,
+    concat('https://cornershopapp.com/cm/orders/', o.external_id) as external_id,
+    unnest(regexp_matches((rc.metadata::json -> 'ocr_text')::text, 'Ticket:\s*([A-Za-z0-9]+)')) as ticket
+from orders_order o 
+    join geo_city gc on o.customer_city_id = gc.id
+    join  receipts_orderreceipt rc on rc.order_id = o.id 
+    left join receipts_orderreceiptfieldvalue as orrv on orrv.receipt_id = rc.id
+where 1=1
+    and o.external_id in (
+'MX-307684-9103530'
+)
+    and o.status = 'DELIVERED'
+    AND o.currency = 'MXN'
+    and o.order_kind = 'NORMAL'
