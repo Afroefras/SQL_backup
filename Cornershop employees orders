@@ -1,0 +1,34 @@
+select 
+    to_char(order_month, 'YYYY-MM') as order_month,
+    orders,
+    users,
+    sum_total_receipt as sales,
+    orders*1.00 / users as frequency,
+    sum_total_receipt*1.00 / orders as avg_ticket,
+    sum_found*1.00 / sum_ordered as found_rate,
+    (sum_found+sum_replaced)*1.00 / sum_ordered as fulfillment_rate
+from 
+    (select 
+        date_trunc('month', o.actual_delivery_time at time zone gc.timezone) as order_month,
+        count(distinct o.id) as orders,
+        count(distinct o.user_id) as users,
+        sum(o.total_receipt) as sum_total_receipt,
+        sum(o.qty_products_ordered) as sum_ordered,
+        sum(o.qty_products_found) as sum_found,
+        sum(o.qty_products_replaced) as sum_replaced
+    from orders_order o
+        join crm_users_view u on u.id = o.user_id
+        join shoppers_shopper cs on cs.user_uuid = u.uuid
+        join geo_city gc on gc.id = o.customer_city_id
+    where 1=1
+        and cs.contract_type = 'INTERNAL'
+        and cs.completed_deliveries + cs.completed_pickings = 0
+        and o.actual_delivery_time >= {{date_from}} - interval '1 day' 
+        and o.actual_delivery_time < {{date_to}} + interval '2 day'
+        and o.actual_delivery_time at time zone gc.timezone >= {{date_from}} 
+        and o.actual_delivery_time at time zone gc.timezone < {{date_to}} + interval '1 day'
+        and o.currency = 'MXN'
+        and o.order_kind = 'NORMAL'
+        and o.status = 'DELIVERED'
+    group by 1
+    ) a
